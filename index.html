@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日月路線 Sun-Moon Trail HK</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.121.0/Build/Cesium/Widgets/widgets.css">
+<script>window.CESIUM_BASE_URL='https://cdn.jsdelivr.net/npm/cesium@1.121.0/Build/Cesium/';</script>
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.121.0/Build/Cesium/Cesium.js"></script>
+<script src="config.js"></script><!-- local only (git-ignored): window.HK3D_KEY = '...' -->
+<style>
+  .view3d { position:relative; flex:1 1 auto; min-height:0; }
+  .view3d .cz { position:absolute; inset:0; border-radius:12px; overflow:hidden; pointer-events:none; }
+  .view3d .cz .cesium-viewer-bottom { pointer-events:auto; transform:scale(.75); transform-origin:left bottom; }
+  .view3d canvas { position:relative; width:100%; height:100%; }
+</style>
+<style>
+  :root { --glass: rgba(20,28,45,.45); --edge: rgba(255,255,255,.25); --txt:#eef3ff; --sun:#ffb02e; --moon:#69b7ff; --line:#ff4d6d; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; color:var(--txt); background:#0b1020; overflow:hidden; }
+  #map { position:absolute; inset:0; }
+  .glass { position:absolute; z-index:1000; background:var(--glass); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%);
+           border:1px solid var(--edge); border-radius:18px; box-shadow: 0 8px 32px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); padding:12px 14px; }
+  #panel { top:12px; left:12px; width:340px; height:calc(100vh - 24px); box-sizing:border-box; overflow:auto; font-size:13px; display:flex; flex-direction:column; }
+  #panel > * { flex-shrink:0; }
+  .tabs { display:flex; gap:4px; margin-bottom:6px; }
+  .tabs button { flex:1; } .tabs button.active { background:rgba(255,255,255,.28); font-weight:600; }
+  .tabpane { display:none; flex:1 1 0; min-height:0; flex-direction:column; }
+  .tabpane.active { display:flex; }
+  .tabpane > * { flex-shrink:0; }
+  #tab1 > #trailWrap { flex:1 1 0; min-height:240px; overflow:auto; }
+  #tab2 > #yearWrap { flex:1 1 0; min-height:240px; overflow:auto; }
+  #sky   { top:12px; right:12px; width:min(560px, calc(100vw - 380px)); min-width:320px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
+  #skyCanvas { cursor:grab; touch-action:none; }
+  #skyCanvas.is-panning { cursor:grabbing; }
+  #zoom { display:none; }
+  #profile { right:12px; bottom:86px; width:min(620px, calc(100vw - 390px)); min-width:360px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
+  #bottom{ left:364px; bottom:12px; width:min(430px, calc(100vw - 24px)); min-width:280px; min-height:48px; display:flex; gap:10px; align-items:center; resize:both; overflow:hidden; }
+  #panel, #sky, #profile { resize:none; }
+  .resize-edge { position:absolute; z-index:1100; }
+  .resize-edge.n, .resize-edge.s { left:12px; right:12px; height:10px; }
+  .resize-edge.e, .resize-edge.w { top:12px; bottom:12px; width:10px; }
+  /* Keep the resize hit-zones inside the panel so overflow clipping does not
+     make the bottom panel's edges impossible to grab. */
+  .resize-edge.n { top:0; cursor:ns-resize; }
+  .resize-edge.s { bottom:0; cursor:ns-resize; }
+  .resize-edge.e { right:0; cursor:ew-resize; }
+  .resize-edge.w { left:0; cursor:ew-resize; }
+  #bottom .drag-grip { position:relative; z-index:1201; cursor:move; user-select:none; font-size:18px; line-height:1; opacity:.75; padding:2px 4px; }
+  h1 { font-size:16px; margin:0 0 8px; }
+  h2 { font-size:13px; margin:10px 0 4px; opacity:.85; }
+  input, select, button { font:inherit; color:var(--txt); background:rgba(255,255,255,.10); border:1px solid var(--edge); border-radius:10px; padding:4px 7px; }
+  input { width:100%; }
+  select { color-scheme:dark; }
+  select option { background:#1c2638; color:#eef3ff; }
+  select option:checked, select option:hover { background:#3a5a8c; color:#fff; }
+  button { cursor:pointer; } button:hover { background:rgba(255,255,255,.22); } button.on { background:rgba(255,77,109,.55); }
+  .row { display:grid; grid-template-columns: 1fr 1fr 70px; gap:5px; margin-bottom:4px; }
+  .kv { display:grid; grid-template-columns: 95px 1fr; gap:2px 6px; font-variant-numeric: tabular-nums; }
+  .kv b { font-weight:600; }
+  .sun { color:var(--sun);} .moon{ color:var(--moon);} .title-moon { color:#ff8c42; } .sun-icon, .moon-icon { font-family:Arial,sans-serif; font-size:1.7em !important; line-height:0; vertical-align:-.08em; display:inline-block; font-weight:700; } .sun-icon { color:var(--sun) !important; } .moon-icon { color:#69b7ff !important; } .ok { color:#4dff9a; font-weight:700; }
+  #slider { flex:1; }
+  #clock { font-size:20px; font-variant-numeric: tabular-nums; min-width:92px; text-align:center; }
+  canvas { width:100%; border-radius:12px; background:rgba(0,0,0,.25); display:block; }
+  #profileCanvas { cursor:crosshair; }
+  .scene-meta { position:absolute; z-index:4; left:8px; top:8px; max-width:calc(100% - 16px); padding:5px 8px; border-radius:7px; background:rgba(5,12,22,.72); color:#fff; font-size:11px; line-height:1.45; font-variant-numeric:tabular-nums; pointer-events:none; }
+  .scene-meta .gps { color:#b9e7ff; }
+  .scene-meta .sun { color:var(--sun); }
+  .scene-meta .moon { color:var(--moon); }
+  .panel-head { cursor:move; user-select:none; }
+  .panel-head::before { content:'⋮⋮'; letter-spacing:-3px; opacity:.55; margin-right:7px; }
+  .legend { display:flex; gap:12px; align-items:center; font-size:11px; opacity:.85; }
+  .legend i { display:inline-block; width:18px; height:3px; vertical-align:middle; margin-right:4px; border-radius:4px; }
+  .legend .sun-line { background:var(--sun); } .legend .moon-line { background:var(--moon); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric: tabular-nums; font-size:12px; }
+  td, th { padding:2px 4px; text-align:right; border-bottom:1px solid rgba(255,255,255,.08);} th { position:sticky; top:0; background:rgba(20,28,45,.9);}
+  tr.hit td { cursor:pointer; } tr.hit:hover td { background:rgba(255,255,255,.12); }
+  .small { font-size:11px; opacity:.7; }
+  @media (max-width:900px){ #panel{width:310px} #sky{width:calc(100vw - 334px)} #profile{left:326px;right:12px;width:auto;min-width:300px} #bottom{left:326px} }
+  @media (max-width:650px){ #panel{width:calc(100vw - 24px);max-height:48vh} #sky,#profile{left:12px;right:12px;width:auto;min-width:0} #sky{top:calc(48vh + 20px);max-height:30vh} #profile{top:calc(78vh + 24px);bottom:auto;max-height:30vh} #bottom{left:12px} }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="panel" class="glass">
+  <h1><span class="sun-icon">☀</span><span class="moon-icon">🔵</span> 日月路線 HK</h1>
+  <div class="tabs"><button id="tabBtn1" class="active">主頁</button><button id="tabBtn2"><span id="yearTabIcon" class="moon-icon">🔵</span> 五年相同角度</button></div>
+  <div id="tab2" class="tabpane">
+    <div class="small">由所選日期起五年內，所選天體（<span class="sun-icon">☀</span>/<span class="moon-icon">🔵</span>）每次最接近 📷→🎯 視線的時刻，且 ΔAzi、ΔAlt 分別在下方「Azi 容差」「Alt 容差」內。ΔAzi/ΔAlt 綠色 = ≤ 主頁「對準容差」；兩者皆綠時該列黃色（日/月正落在被攝點上），只有一項綠時該列淺紫色。相機/被攝點/天體/日期/容差改變時自動重新搜尋。</div>
+    <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
+      <span>Azi ±</span><input id="yAziTol" type="number" step="0.5" min="0.5" value="1" style="width:60px"><span>°</span>
+      <span>Alt ±</span><input id="yAltTol" type="number" step="0.5" value="1" style="width:60px"><span>°</span>
+      <button id="yRun" style="margin-left:auto">重新搜尋</button>
+    </div>
+    <div id="yStatus" class="small">—</div>
+    <div id="yearWrap"><table id="yearTbl"></table></div>
+  </div>
+  <div id="tab1" class="tabpane active">
+  <div style="display:flex; gap:6px; margin-bottom:6px">
+    <input type="date" id="date">
+    <select id="body"><option value="Moon">🔵 月亮</option><option value="Sun">☀ 太陽</option></select>
+  </div>
+
+  <h2>📷 相機（緯度, 經度, 離地高度 m）</h2>
+  <div class="row"><input id="camLat"><input id="camLon"><input id="camH"></div>
+  <div class="row" style="margin-top:4px"><label title="隱藏所有 3D 樓宇圖層（身邊近樓遮擋時用；地形不受影響）。建議搭配手動地標使用"><input id="hideBld" type="checkbox"> 隱藏 3D 樓宇</label>
+  <span title="只裁掉身邊 100 米內的扭曲近物/深色帶，遠樓保留"><button id="hideNear">隱藏近物</button><button id="showNear">顯示近物</button></span>
+  <label title="隱藏 DEM 地形層（深色斜帶若是地形數據扭曲，勾選即消失；3D 樓宇不受影響）"><input id="hideTerrain" type="checkbox"> 隱藏地形</label></div>
+  <h2>🎯 被攝點（緯度, 經度, 高度 mPD）</h2>
+  <div class="row"><input id="tgtLat"><input id="tgtLon"><input id="tgtH"></div>
+  <div style="display:flex; gap:6px; margin:6px 0">
+    <button id="setCam">點地圖設相機</button><button id="setTgt">點地圖設被攝</button><button id="swap">⇄</button>
+  </div>
+  <div class="small">相機高度是離地高度（AGL）；被攝點高度仍是 mPD 絕對標高。例：行人天橋輸入 6 m。</div>
+
+  <h2>📍 手動地標（3D 示意樓宇）</h2>
+  <div class="row"><input id="lmAzi" placeholder="方位°"><input id="lmDist" placeholder="距離 m"><input id="lmH" placeholder="高度 m"></div>
+  <div class="row"><input id="lmW" placeholder="寬度 m"><input id="lmLabel" placeholder="名稱"><button id="lmAdd">＋ 新增</button></div>
+  <div id="lmList" class="small"></div>
+  <div class="small">地標以半透明橘色盒子顯示在兩個 3D 視角，供 LandsD 樓宇數據不準時做構圖參考。方位=從相機看過去的方位角。</div>
+
+  <h2>視線 📷→🎯</h2>
+  <div class="kv" id="lineInfo"></div>
+
+  <h2>當前位置（從相機看）</h2>
+  <div class="kv" id="bodyInfo"></div>
+
+  <h2>升落時間</h2>
+  <div class="kv" id="riseInfo"></div>
+
+  <h2>對準容差 <span class="small">(度，預設 1°；日月半徑約 0.25°)</span></h2>
+  <input id="tol" type="number" step="0.05" value="1">
+
+  <h2>本日對準時間 <button id="findDay" style="float:right">搜尋本日</button></h2>
+  <div id="dayHits" class="small">—</div>
+
+  <h2>全日路徑（每 <select id="step"><option>1</option><option selected>5</option><option>10</option><option>30</option></select> 分鐘）
+    <button id="csv" style="float:right">CSV</button></h2>
+  <div id="trailWrap"><table id="trail"></table></div>
+  </div>
+</div>
+
+<div id="sky" class="glass">
+  <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+    <b>VR 取景器（3D 實景 + 日月路徑）</b>
+    <span>
+      <select id="skyMode"><option value="3d">對準放大 3D 實景</option><option value="target">對準放大（圖表）</option><option value="full">全天</option></select>
+      <select id="focal" title="鏡頭焦距（全片幅 36mm）"><option value="">焦距</option><option>24</option><option>50</option><option>100</option><option>200</option><option selected>300</option><option>400</option><option>600</option><option>800</option><option>1200</option><option>2000</option></select>
+      <select id="zoom"><option>1</option><option selected>3</option><option>6</option><option>12</option><option>30</option></select>°
+      <button id="centerBody" title="把 VR 視角中心對準所選的日 / 月（方便構圖）">🎯 對準日/月</button>
+    </span>
+  </div>
+  <div class="view3d"><div class="cz" id="sky3d"></div><canvas id="skyCanvas" width="1120" height="560"></canvas><div id="skyInfo" class="scene-meta"></div></div>
+  <div class="small">3D 樓宇/道路：地政總署 3D Spatial Data；山形：Terrain Tiles。滾輪縮放、拖曳平移；選焦距 = 全片幅視角。🎯 十字 = 被攝點方向，日/月為真實角大小。</div>
+</div>
+
+<div id="profile" class="glass">
+  <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+    <b>相機廣角實景（人眼高度 → 日/月）</b>
+    <span class="legend"><span><i class="sun-line"></i>日線</span><span><i class="moon-line"></i>月線</span></span>
+  </div>
+  <div class="view3d"><div class="cz" id="prof3d"></div><canvas id="profileCanvas" width="1240" height="520"></canvas><div id="profileInfo" class="scene-meta"></div></div>
+  <div class="small">廣角 3D 實景（樓宇、道路、山、天空）疊加全日日/月軌跡及整點時間；滾輪改視角、拖曳平移。</div>
+</div>
+
+<div id="bottom" class="glass">
+  <button id="rev">◀</button><button id="play">▶</button>
+  <input type="range" id="slider" min="0" max="1439" step="1">
+  <button id="minus">−1m</button><button id="plus">+1m</button>
+  <div id="clock">--:--</div>
+</div>
+
+<script>
+'use strict';
+const A = Astronomy;
+const HK = 8 * 3600e3;
+const $ = id => document.getElementById(id);
+const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+const R_EARTH = 6371008.8, K_REFR = 0.13;     // terrestrial refraction coefficient
+const AU_KM = 149597870.7, R_SUN = 695700, R_MOON = 1737.4;
+
+// ---------- state ----------
+// Reproduction setup: pedestrian footbridge, looking west toward 朗庭園.
+// Requested screen4 reproduction scene: 2026-10-24 03:54 HKT, Moon.
+// These camera/target values reproduce the more-correct reference view.
+const def = { date:'2026-10-24', body:'Moon', cam:[22.4445094,114.0322226,6], tgt:[22.4446011,114.0173931,200], min:234, cal:[0,0], landmarks:[] };
+// Use a scene-specific key so an older saved scene cannot hide this default.
+const SETTINGS_KEY = 'smt-screen4-reference-v2';
+let S = Object.assign({}, def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
+if (!Array.isArray(S.cal)) S.cal=[0,0];   // 3D scene calibration ΔAzi/ΔAlt (deg)
+function save(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(S)); }
+
+function hkDateStr(d){ return new Date(d.getTime() + HK).toISOString().slice(0,10); }
+function hkTime(d, sec=true){ return new Date(d.getTime() + HK).toISOString().slice(11, sec?19:16); }
+function dayStart(){ return new Date(S.date + 'T00:00:00+08:00'); }
+function curTime(){ return new Date(dayStart().getTime() + S.min * 60e3); }
+
+// ---------- geodesy: Vincenty inverse on WGS84 ----------
+function vincenty(lat1, lon1, lat2, lon2){
+  const a=6378137, f=1/298.257223563, b=a*(1-f);
+  const L=rad(lon2-lon1), U1=Math.atan((1-f)*Math.tan(rad(lat1))), U2=Math.atan((1-f)*Math.tan(rad(lat2)));
+  const sU1=Math.sin(U1), cU1=Math.cos(U1), sU2=Math.sin(U2), cU2=Math.cos(U2);
+  let lam=L, lamP, it=0, sS, cS, sig, sA, c2A, c2Sm;
+  do {
+    const sl=Math.sin(lam), cl=Math.cos(lam);
+    sS=Math.sqrt((cU2*sl)**2 + (cU1*sU2 - sU1*cU2*cl)**2);
+    if (sS===0) return {dist:0, az:0};
+    cS=sU1*sU2 + cU1*cU2*cl; sig=Math.atan2(sS,cS);
+    sA=cU1*cU2*sl/sS; c2A=1-sA*sA;
+    c2Sm = c2A ? cS - 2*sU1*sU2/c2A : 0;
+    const C=f/16*c2A*(4+f*(4-3*c2A));
+    lamP=lam; lam=L+(1-C)*f*sA*(sig+C*sS*(c2Sm+C*cS*(-1+2*c2Sm*c2Sm)));
+  } while (Math.abs(lam-lamP)>1e-12 && ++it<200);
+  const u2=c2A*(a*a-b*b)/(b*b);
+  const AA=1+u2/16384*(4096+u2*(-768+u2*(320-175*u2))), BB=u2/1024*(256+u2*(-128+u2*(74-47*u2)));
+  const dS=BB*sS*(c2Sm+BB/4*(cS*(-1+2*c2Sm*c2Sm)-BB/6*c2Sm*(-3+4*sS*sS)*(-3+4*c2Sm*c2Sm)));
+  const sl=Math.sin(lam), cl=Math.cos(lam);
+  const az=(deg(Math.atan2(cU2*sl, cU1*sU2 - sU1*cU2*cl))+360)%360;
+  return { dist: b*AA*(sig-dS), az };
+}
+// line of sight: azimuth + apparent altitude (curvature & terrestrial refraction)
+function sightLine(){
+  const [la1,lo1]=S.cam, h1=cameraElevationMpd(), [la2,lo2,h2]=S.tgt;
+  const v=vincenty(la1,lo1,la2,lo2);
+  const alt = v.dist>0 ? deg(Math.atan2(h2-h1, v.dist)) - deg(v.dist*(1-K_REFR)/(2*R_EARTH)) : 0;
+  return { az:v.az, alt, dist:v.dist };
+}
+function dest(lat, lon, az, d){ // spherical, for drawing only
+  const dr=d/R_EARTH, t=rad(az), p1=rad(lat), l1=rad(lon);
+  const p2=Math.asin(Math.sin(p1)*Math.cos(dr)+Math.cos(p1)*Math.sin(dr)*Math.cos(t));
+  const l2=l1+Math.atan2(Math.sin(t)*Math.sin(dr)*Math.cos(p1), Math.cos(dr)-Math.sin(p1)*Math.sin(p2));
+  return [deg(p2), deg(l2)];
+}
+
+// ---------- astronomy ----------
+function observer(){ return new A.Observer(S.cam[0], S.cam[1], cameraElevationMpd()); }
+function bodyPos(body, t, obs=observer()){
+  const eq = A.Equator(body, t, obs, true, true);              // topocentric, of-date, aberration
+  const hor = A.Horizon(t, obs, eq.ra, eq.dec, 'normal');      // with atmospheric refraction
+  const km = eq.dist * AU_KM;
+  const diam = 2*deg(Math.atan((body==='Sun'?R_SUN:R_MOON)/km));
+  return { az:hor.azimuth, alt:hor.altitude, diam, km };
+}
+function angSep(az1, alt1, az2, alt2){
+  const c = Math.sin(rad(alt1))*Math.sin(rad(alt2)) + Math.cos(rad(alt1))*Math.cos(rad(alt2))*Math.cos(rad(az1-az2));
+  return deg(Math.acos(Math.min(1, Math.max(-1, c))));
+}
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl:false }).setView([S.cam[0], S.cam[1]], 15);
+L.control.zoom({ position:'bottomright' }).addTo(map);
+L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png', { maxZoom:20, attribution:'© 地政總署 Lands Department' }).addTo(map);
+L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png', { maxZoom:20 }).addTo(map);
+const icon = t => L.divIcon({ html:`<div style="font-size:24px; transform:translate(-8px,-14px)">${t}</div>`, className:'' });
+const camM = L.marker(S.cam, { icon:icon('📷'), draggable:true }).addTo(map);
+const tgtM = L.marker(S.tgt, { icon:icon('🎯'), draggable:true }).addTo(map);
+const sightL = L.polyline([], { color:'#ff4d6d', weight:3 }).addTo(map);
+const sunL = L.polyline([], { color:'#ffb02e', weight:3 }).addTo(map);
+const moonL = L.polyline([], { color:'#2f8ff0', weight:4, lineCap:'round', lineJoin:'round' }).addTo(map);
+const riseLs = L.layerGroup().addTo(map);
+const mouse = L.control({ position:'bottomleft' });
+mouse.onAdd = () => { const d=L.DomUtil.create('div','glass'); d.style.position='static'; d.style.padding='4px 10px'; d.id='mouse'; return d; };
+mouse.addTo(map);
+map.on('mousemove', e => $('mouse').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
+
+let clickMode = null;
+$('setCam').onclick = () => setMode('cam'); $('setTgt').onclick = () => setMode('tgt');
+function setMode(m){ clickMode = clickMode===m ? null : m; $('setCam').classList.toggle('on', clickMode==='cam'); $('setTgt').classList.toggle('on', clickMode==='tgt'); }
+map.on('click', e => { if(!clickMode) return; S[clickMode][0]=+e.latlng.lat.toFixed(7); S[clickMode][1]=+e.latlng.lng.toFixed(7); setMode(null); fillInputs(); fullUpdate(); });
+camM.on('dragend', e => { const p=e.target.getLatLng(); S.cam[0]=+p.lat.toFixed(7); S.cam[1]=+p.lng.toFixed(7); fillInputs(); fullUpdate(); });
+tgtM.on('dragend', e => { const p=e.target.getLatLng(); S.tgt[0]=+p.lat.toFixed(7); S.tgt[1]=+p.lng.toFixed(7); fillInputs(); fullUpdate(); });
+$('swap').onclick = () => { [S.cam, S.tgt] = [S.tgt, S.cam]; fillInputs(); fullUpdate(); };
+
+// ---------- inputs ----------
+const fields = { camLat:['cam',0], camLon:['cam',1], camH:['cam',2], tgtLat:['tgt',0], tgtLon:['tgt',1], tgtH:['tgt',2] };
+function fillInputs(){ for (const k in fields){ const [o,i]=fields[k]; $(k).value=S[o][i]; } $('date').value=S.date; $('body').value=S.body; $('slider').value=S.min; const tabIcon=$('yearTabIcon'); tabIcon.className=S.body==='Sun'?'sun':'moon-icon'; tabIcon.textContent=S.body==='Sun'?'☀':'🔵'; }
+for (const k in fields) $(k).onchange = () => {
+  const v = $(k).value.trim();
+  // allow pasting "lat, lon" into a lat field
+  if (/,/.test(v) && k.endsWith('Lat')) { const [a,b]=v.split(',').map(Number); const o=fields[k][0]; S[o][0]=a; S[o][1]=b; }
+  else { const [o,i]=fields[k]; S[o][i]=Number(v); }
+  fillInputs(); fullUpdate();
+};
+$('date').onchange = () => { S.date=$('date').value; fullUpdate(); };
+$('body').onchange = () => { S.body=$('body').value; fullUpdate(); };
+$('step').onchange = buildTrailTable;
+$('skyMode').onchange = drawSky;
+const skyView = { zoom:2*deg(Math.atan(18/300)) };
+$('focal').onchange = () => { const f=+$('focal').value; if (f){ skyView.zoom = 2*deg(Math.atan(18/f)); profView.fov=skyView.zoom; skyPan.az=0; skyPan.alt=0; drawSky(); drawProfile(); } };
+// center the VR view on the selected Sun/Moon (useful for framing the shot)
+$('centerBody').onclick = () => {
+  if ($('skyMode').value === 'full') return;
+  const line=sightLine(), p=bodyPos(S.body,curTime(),observer());
+  let dAz=p.az-line.az; dAz=((dAz+540)%360)-180;   // wrap to [-180,180]
+  skyPan.az=dAz; skyPan.alt=p.alt-line.alt;
+  drawSky();
+};
+// hide/show all 3D building tilesets (reliable toggle when nearby blocks occlude the view)
+function applyHideBld(){
+  const hide=$('hideBld')?.checked||false;
+  for (const k of ['sky','prof']){
+    const vw=V3[k]; if (!vw) continue;   // V3.sky IS the Cesium Viewer
+    const prims=vw.scene.primitives;
+    for (let i=0;i<prims.length;i++){
+      const p=prims.get(i);
+      if (p instanceof Cesium.Cesium3DTileset){ p.show=!hide; }
+    }
+    vw.scene.requestRender();
+  }
+}
+$('hideBld').onchange=()=>{ applyHideBld(); };
+// hide/show terrain globe (for distorted DEM dark band near camera)
+function applyHideTerrain(){
+  const hide=$('hideTerrain')?.checked||false;
+  for (const k of ['sky','prof']){
+    const vw=V3[k]; if (!vw) continue;
+    vw.scene.globe.show=!hide;
+    vw.scene.requestRender();
+  }
+}
+$('hideTerrain').onchange=()=>{ applyHideTerrain(); };
+// near-plane clip: hide distorted nearby geometry (dark band) while keeping distant buildings
+let nearClipM=0.1;
+$('hideNear').onclick=()=>{ nearClipM=100; drawSky(); drawProfile(); };
+$('showNear').onclick=()=>{ nearClipM=0.1; drawSky(); drawProfile(); };
+// manual landmark boxes (workaround when LandsD building data is inaccurate)
+async function refreshLandmarks(){
+  for (const k of ['sky','prof']){
+    const vw=V3[k]; if (!vw) continue;   // V3.sky IS the Cesium Viewer
+    if (vw._lmEntities) for (const e of vw._lmEntities) vw.entities.remove(e);
+    vw._lmEntities=[];
+    for (const lm of (S.landmarks||[])){
+      const [la,lo]=dest(S.cam[0],S.cam[1],lm.azi,lm.dist);
+      let base=null;
+      try{ base=await demHeight(la,lo); }catch(_){}
+      if (base==null) base=cameraElevationMpd()-S.cam[2]; // fallback: camera ground
+      const e=vw.entities.add({
+        position:Cesium.Cartesian3.fromDegrees(lo,la,base+lm.h/2),
+        box:{ dimensions:new Cesium.Cartesian3(lm.w,lm.w,lm.h),
+          material:Cesium.Color.ORANGE.withAlpha(0.45),
+          outline:true, outlineColor:Cesium.Color.ORANGE }
+      });
+      vw._lmEntities.push(e);
+    }
+    vw.scene.requestRender();
+  }
+  renderLmList();
+}
+function renderLmList(){
+  const el=$('lmList'); if (!el) return;
+  el.innerHTML=(S.landmarks||[]).map((lm,i)=>
+    `<div>${i+1}. ${lm.label||'地標'} — 方位${lm.azi}° 距${lm.dist}m 高${lm.h}m <a href="#" data-i="${i}" class="lmDel">刪除</a></div>`
+  ).join('')||'<span style="opacity:.6">尚未新增地標</span>';
+  el.querySelectorAll('.lmDel').forEach(a=>a.onclick=(ev)=>{ ev.preventDefault(); S.landmarks.splice(+a.dataset.i,1); save(); refreshLandmarks(); });
+}
+$('lmAdd').onclick=()=>{
+  const azi=parseFloat($('lmAzi').value), dist=parseFloat($('lmDist').value),
+        h=parseFloat($('lmH').value), w=parseFloat($('lmW').value)||20,
+        label=$('lmLabel').value.trim();
+  if (!(azi>=0&&azi<360&&dist>0&&h>0)){ alert('請輸入有效的方位（0–360°）、距離、高度'); return; }
+  S.landmarks=S.landmarks||[];
+  S.landmarks.push({azi,dist,h,w,label});
+  $('lmAzi').value=$('lmDist').value=$('lmH').value=$('lmW').value=$('lmLabel').value='';
+  save(); refreshLandmarks();
+};
+const skyPan = { az:0, alt:0, active:false, x:0, y:0 };
+const skyCanvas = $('skyCanvas');
+skyCanvas.addEventListener('wheel', e => {
+  if ($('skyMode').value === 'full') return;
+  e.preventDefault();
+  skyView.zoom = Math.max(.5, Math.min(360, skyView.zoom * (e.deltaY < 0 ? .85 : 1/.85)));
+  drawSky();
+}, { passive:false });
+skyCanvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || $('skyMode').value === 'full') return;
+  skyPan.active = true; skyPan.x = e.clientX; skyPan.y = e.clientY;
+  skyCanvas.classList.add('is-panning'); skyCanvas.setPointerCapture(e.pointerId);
+});
+skyCanvas.addEventListener('pointermove', e => {
+  if (!skyPan.active) return;
+  const r = skyCanvas.getBoundingClientRect(), span = $('skyMode').value === '3d' ? skyView.zoom : +$('zoom').value;
+  skyPan.az -= (e.clientX - skyPan.x) / r.width * span;
+  skyPan.alt += (e.clientY - skyPan.y) / r.height * span * r.height / r.width;
+  skyPan.x = e.clientX; skyPan.y = e.clientY; drawSky(); refreshPanMeta();
+});
+const stopSkyPan = () => { skyPan.active = false; skyCanvas.classList.remove('is-panning'); };
+skyCanvas.addEventListener('pointerup', stopSkyPan);
+skyCanvas.addEventListener('pointercancel', stopSkyPan);
+$('slider').oninput = () => { S.min=+$('slider').value; update(); };
+$('minus').onclick = () => { S.min=Math.max(0,S.min-1); fillInputs(); update(); };
+$('plus').onclick  = () => { S.min=Math.min(1439,S.min+1); fillInputs(); update(); };
+// Left/Right arrow keys = −1m / +1m (Shift = 10m)
+document.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const t = e.target, tag = t.tagName;
+  if (t !== $('slider') && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable)) return;
+  e.preventDefault();
+  const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowLeft' ? -1 : 1);
+  S.min = Math.min(1439, Math.max(0, S.min + step));
+  $('slider').value = S.min; fillInputs(); update();
+});
+let playT=null, playDir=0;
+function stopPlay(){ clearInterval(playT); playT=null; playDir=0; $('play').textContent='▶'; $('rev').textContent='◀'; }
+function startPlay(dir){
+  const was = playDir; stopPlay();
+  if (was === dir) return;            // same button again = pause
+  playDir = dir; $(dir>0?'play':'rev').textContent='⏸';
+  playT = setInterval(() => { S.min=(S.min+dir+1440)%1440; $('slider').value=S.min; update(); }, 120);
+}
+$('play').onclick = () => startPlay(1);
+$('rev').onclick  = () => startPlay(-1);
+
+// ---------- beep ----------
+let actx=null, wasAligned=false;
+function beep(){
+  actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+  const o=actx.createOscillator(), g=actx.createGain();
+  o.frequency.value=1200; g.gain.setValueAtTime(.25, actx.currentTime); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime+.25);
+  o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+.25);
+}
+
+// ---------- day data cache ----------
+let day = { sun:[], moon:[] };   // per-minute positions
+function computeDay(){
+  const obs=observer(), t0=dayStart().getTime();
+  day = { sun:[], moon:[] };
+  for (let m=0; m<=1440; m++){ const t=new Date(t0+m*60e3); day.sun.push(bodyPos('Sun',t,obs)); day.moon.push(bodyPos('Moon',t,obs)); }
+}
+
+function riseSet(){
+  const obs=observer(), t0=dayStart(), out=[];
+  riseLs.clearLayers();
+  for (const b of ['Sun','Moon']){
+    const r=A.SearchRiseSet(b,obs,+1,t0,1), s=A.SearchRiseSet(b,obs,-1,t0,1), c=A.SearchHourAngle(b,obs,0,t0);
+    const cls=b==='Sun'?'sun':'moon', name=b==='Sun'?'<span class="sun-icon">☀</span>':'<span class="moon-icon">🔵</span>';
+    const f = (x, label) => {
+      if (!x || x.date - t0 > 86400e3) return `<b class="${cls}">${name} ${label}</b><span>—</span>`;
+      const p=bodyPos(b,x.date,obs);
+      if (label!=='中天') riseLs.addLayer(L.polyline([S.cam, dest(S.cam[0],S.cam[1],p.az,30000)], { color:b==='Sun'?'#ffb02e':'#69b7ff', weight:1.5, dashArray:'6 6' }));
+      return `<b class="${cls}">${name} ${label}</b><span>${hkTime(x.date)}  Azi ${p.az.toFixed(2)}°  Alt ${p.alt.toFixed(2)}°</span>`;
+    };
+    out.push(f(r,'升'), f(c.time.date - t0 < 86400e3 ? c.time : null,'中天'), f(s,'落'));
+  }
+  const ill=A.Illumination('Moon', new Date(t0.getTime()+12*3600e3));
+  out.push(`<b class="moon">月相 (中午)</b><span>${(ill.phase_fraction*100).toFixed(1)}%</span>`);
+  $('riseInfo').innerHTML=out.join('');
+}
+
+function buildTrailTable(){
+  const step=+$('step').value, t0=dayStart().getTime();
+  let h='<tr><th>時間</th><th class="sun"><span class="sun-icon">☀</span>Azi</th><th class="sun"><span class="sun-icon">☀</span>Alt</th><th class="moon"><span class="moon-icon">🔵</span>Azi</th><th class="moon"><span class="moon-icon">🔵</span>Alt</th></tr>';
+  for (let m=0; m<1440; m+=step){
+    const s=day.sun[m], mo=day.moon[m];
+    h+=`<tr class="hit" data-m="${m}"><td>${hkTime(new Date(t0+m*60e3),false)}</td><td>${s.az.toFixed(2)}</td><td>${s.alt.toFixed(2)}</td><td>${mo.az.toFixed(2)}</td><td>${mo.alt.toFixed(2)}</td></tr>`;
+  }
+  $('trail').innerHTML=h;
+  $('trail').querySelectorAll('tr.hit').forEach(r => r.onclick = () => { S.min=+r.dataset.m; fillInputs(); update(); });
+}
+$('csv').onclick = () => {
+  const step=+$('step').value, t0=dayStart().getTime();
+  let c=`# camera ${S.cam.join(',')}\ntime_HK,sun_azi,sun_alt,moon_azi,moon_alt\n`;
+  for (let m=0;m<1440;m+=step){ const s=day.sun[m], mo=day.moon[m]; c+=`${S.date} ${hkTime(new Date(t0+m*60e3))},${s.az.toFixed(4)},${s.alt.toFixed(4)},${mo.az.toFixed(4)},${mo.alt.toFixed(4)}\n`; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'})); a.download=`trail_${S.date}.csv`; a.click();
+};
+
+// alignment search for the day: local minima of separation, refined to ~0.1 s
+$('findDay').onclick = () => {
+  const line=sightLine(), obs=observer(), t0=dayStart().getTime(), arr=S.body==='Sun'?day.sun:day.moon, tol=+$('tol').value;
+  const sep = m => angSep(arr[m].az, arr[m].alt, line.az, line.alt);
+  const sepT = t => { const p=bodyPos(S.body,new Date(t),obs); return angSep(p.az,p.alt,line.az,line.alt); };
+  const hits=[];
+  for (let m=1; m<1440; m++){
+    if (sep(m)<=sep(m-1) && sep(m)<=sep(m+1) && sep(m)<3){
+      let a=t0+(m-1)*60e3, b=t0+(m+1)*60e3;            // golden-section refine
+      const g=(Math.sqrt(5)-1)/2;
+      while (b-a>100){ const c=b-g*(b-a), d=a+g*(b-a); if (sepT(c)<sepT(d)) b=d; else a=c; }
+      const t=(a+b)/2, p=bodyPos(S.body,new Date(t),obs), d=sepT(t);
+      hits.push({t, p, d});
+    }
+  }
+  $('dayHits').innerHTML = hits.length ? hits.map(h =>
+    `<div class="hit" style="cursor:pointer" data-t="${h.t}"><span class="${h.d<=tol?'ok':''}">${hkTime(new Date(h.t))}</span> Δ ${h.d.toFixed(3)}° · Azi ${h.p.az.toFixed(3)}° Alt ${h.p.alt.toFixed(3)}°</div>`).join('')
+    : '本日最接近距離 > 3°，沒有對準。';
+  $('dayHits').querySelectorAll('[data-t]').forEach(e => e.onclick = () => { S.min=Math.round((+e.dataset.t - t0)/60e3); fillInputs(); update(); });
+};
+
+// ---------- sky chart ----------
+function drawSky(){
+  const cv=$('skyCanvas'), box=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  const W=Math.max(320,Math.round(box.width*dpr)), H=Math.max(150,Math.round(box.height*dpr));
+  if (cv.width!==W||cv.height!==H){ cv.width=W; cv.height=H; }
+  const g=cv.getContext('2d');
+  const use3d = $('skyMode').value==='3d' && V3.sky;
+  $('sky3d').style.display = use3d ? '' : 'none';
+  cv.style.background = use3d ? 'transparent' : '';
+  if (use3d){
+    const line=sightLine(), fov=Math.min(150, skyView.zoom);
+    const cAz=line.az+skyPan.az, cAlt=line.alt+skyPan.alt;
+    setCam3D(V3.sky, cAz, cAlt, fov, W, H);
+    drawOverlay(g, W, H, projector(V3.sky, W, H), cAz, cAlt, fov);
+    return;
+  }
+  g.clearRect(0,0,W,H);
+  const line=sightLine(), t=curTime(), obs=observer();
+  const full=$('skyMode').value==='full';
+  let az0, az1, al0, al1;
+  if (full){ az0=0; az1=360; al0=-10; al1=90; }
+  else { const span=skyView.zoom; const v=span*H/W; az0=line.az+skyPan.az-span/2; az1=line.az+skyPan.az+span/2; al0=line.alt+skyPan.alt-v/2; al1=line.alt+skyPan.alt+v/2; }
+  const wrap = a => { if (full) return a; let d=a-line.az; d=((d+540)%360)-180; return line.az+d; };
+  const X = a => (wrap(a)-az0)/(az1-az0)*W, Y = h => H-(h-al0)/(al1-al0)*H, pxDeg = W/(az1-az0);
+
+  // grid
+  g.strokeStyle='rgba(255,255,255,.12)'; g.fillStyle='rgba(255,255,255,.6)'; g.font='20px Segoe UI'; g.lineWidth=1;
+  const gs = full ? 30 : niceStep((az1-az0)/8);
+  for (let a=Math.ceil(az0/gs)*gs; a<=az1; a+=gs){ g.beginPath(); g.moveTo((a-az0)*pxDeg,0); g.lineTo((a-az0)*pxDeg,H); g.stroke(); g.fillText(`${((a%360)+360)%360}°`.replace(/(\.\d{2})\d+/,'$1'), (a-az0)*pxDeg+3, H-6); }
+  const gv = full ? 10 : gs;
+  for (let h=Math.ceil(al0/gv)*gv; h<=al1; h+=gv){ g.beginPath(); g.moveTo(0,Y(h)); g.lineTo(W,Y(h)); g.stroke(); g.fillText(`${+h.toFixed(3)}°`, 3, Y(h)-4); }
+  g.strokeStyle='rgba(120,255,160,.6)'; g.lineWidth=2; g.beginPath(); g.moveTo(0,Y(0)); g.lineTo(W,Y(0)); g.stroke();
+
+  // trails
+  for (const [arr, col] of [[day.sun,'#ffb02e'],[day.moon,'#69b7ff']]){
+    g.strokeStyle=col; g.lineWidth=2; g.beginPath(); let prev=null;
+    arr.forEach((p,i) => { const x=X(p.az), y=Y(p.alt); if (prev && Math.abs(x-prev)>W/2) g.moveTo(x,y); else i?g.lineTo(x,y):g.moveTo(x,y); prev=x; });
+    g.stroke();
+    if (!full){ // minute ticks
+      g.fillStyle=col; arr.forEach(p => { g.beginPath(); g.arc(X(p.az),Y(p.alt),2,0,7); g.fill(); });
+    }
+  }
+  // current bodies (true size in zoom mode)
+  for (const b of ['Sun','Moon']){
+    const p=bodyPos(b,t,obs), r=full?8:Math.max(2,p.diam/2*pxDeg);
+    g.fillStyle = b==='Sun'?'rgba(255,176,46,.85)':'rgba(105,183,255,.96)';
+    g.beginPath(); g.arc(X(p.az),Y(p.alt),r,0,7); g.fill();
+  }
+  // target cross
+  const tx=X(line.az), ty=Y(line.alt);
+  g.strokeStyle='#ff4d6d'; g.lineWidth=2; g.beginPath(); g.moveTo(tx-20,ty); g.lineTo(tx+20,ty); g.moveTo(tx,ty-20); g.lineTo(tx,ty+20); g.stroke();
+  const tol=+$('tol').value; g.setLineDash([6,6]); g.beginPath(); g.arc(tx,ty,full?14:tol*pxDeg,0,7); g.stroke(); g.setLineDash([]);
+  g.fillStyle='#fff'; g.fillText(hkTime(t), W-110, 24);
+}
+function niceStep(x){ const p=10**Math.floor(Math.log10(x)), n=x/p; return (n<1.5?1:n<3?2:n<7?5:10)*p; }
+
+// ---------- floating panels ----------
+function makeFloating(el){
+  if (!['panel','sky','profile','bottom'].includes(el.id)) return;
+  ['n','e','s','w'].forEach(edge => {
+    const h=document.createElement('span'); h.className=`resize-edge ${edge}`; h.dataset.edge=edge; h.setAttribute('aria-hidden','true'); el.appendChild(h);
+    let resize=null;
+    h.addEventListener('pointerdown', e => {
+      if (e.button!==0) return;
+      e.preventDefault(); e.stopPropagation();
+      const r=el.getBoundingClientRect();
+      const cs=getComputedStyle(el);
+      resize={ edge, x:e.clientX, y:e.clientY, left:r.left, top:r.top, width:r.width, height:r.height,
+        minWidth:parseFloat(cs.minWidth)||0, minHeight:parseFloat(cs.minHeight)||0 };
+      el.style.right='auto'; el.style.bottom='auto'; el.style.left=r.left+'px'; el.style.top=r.top+'px';
+      h.setPointerCapture(e.pointerId);
+    });
+    h.addEventListener('pointermove', e => {
+      if (!resize) return;
+      const dx=e.clientX-resize.x, dy=e.clientY-resize.y;
+      let left=resize.left, top=resize.top, width=resize.width, height=resize.height;
+      if (edge==='e') width=Math.max(resize.minWidth,resize.width+dx);
+      if (edge==='s') height=Math.max(resize.minHeight,resize.height+dy);
+      if (edge==='w'){ width=Math.max(resize.minWidth,resize.width-dx); left=resize.left+resize.width-width; }
+      if (edge==='n'){ height=Math.max(resize.minHeight,resize.height-dy); top=resize.top+resize.height-height; }
+      el.style.left=Math.max(4,left)+'px'; el.style.top=Math.max(4,top)+'px'; el.style.width=width+'px'; el.style.height=height+'px';
+    });
+    h.addEventListener('pointerup', () => { resize=null; });
+    h.addEventListener('pointercancel', () => { resize=null; });
+  });
+  let handle=el.querySelector('.panel-head');
+  if (!handle && el.id==='panel') handle=el.querySelector('h1');
+  if (!handle && el.id==='bottom') {
+    handle=document.createElement('span'); handle.className='drag-grip'; handle.textContent='⋮⋮'; handle.title='拖曳面板';
+    el.insertBefore(handle,el.firstChild);
+  }
+  if(!handle) return;
+  let drag=null;
+  handle.addEventListener('pointerdown', e => {
+    if (e.button!==0 || e.target.closest('input,select,button')) return;
+    const r=el.getBoundingClientRect();
+    drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top}; handle.setPointerCapture(e.pointerId);
+    el.style.right='auto'; el.style.bottom='auto'; el.style.left=r.left+'px'; el.style.top=r.top+'px';
+  });
+  handle.addEventListener('pointermove', e => { if(!drag) return; el.style.left=Math.max(4,drag.left+e.clientX-drag.x)+'px'; el.style.top=Math.max(4,drag.top+e.clientY-drag.y)+'px'; });
+  handle.addEventListener('pointerup', () => { drag=null; });
+  // The bottom panel has no title bar; allow its blank grey background to
+  // move the panel too, while keeping the slider and buttons interactive.
+  if (el.id==='bottom') {
+    el.addEventListener('pointerdown', e => {
+      if (e.target !== el || e.button!==0) return;
+      const r=el.getBoundingClientRect();
+      drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};
+      el.setPointerCapture(e.pointerId);
+      el.style.right='auto'; el.style.bottom='auto'; el.style.left=r.left+'px'; el.style.top=r.top+'px';
+    });
+    el.addEventListener('pointermove', e => { if(!drag) return; el.style.left=Math.max(4,drag.left+e.clientX-drag.x)+'px'; el.style.top=Math.max(4,drag.top+e.clientY-drag.y)+'px'; });
+    el.addEventListener('pointerup', () => { drag=null; });
+  }
+}
+document.querySelectorAll('.glass').forEach(makeFloating);
+
+// ---------- 3D line-of-sight profile ----------
+const profView = { fov:2*deg(Math.atan(18/300)), az:0, alt:0, active:false, x:0, y:0 };
+function drawProfile(){
+  if (!V3.prof){ $('prof3d').style.display='none'; return drawProfile2D(); }
+  const cv=$('profileCanvas'), box=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  const W=Math.round(Math.max(320,box.width)*dpr), H=Math.round(Math.max(150,box.height)*dpr);
+  if (cv.width!==W||cv.height!==H){ cv.width=W; cv.height=H; }
+  const g=cv.getContext('2d'); g.setTransform(1,0,0,1,0,0);
+  cv.style.background='transparent';
+  const line=sightLine();
+  const cAz=line.az+profView.az, cAlt=line.alt+profView.alt;
+  setCam3D(V3.prof, cAz, cAlt, profView.fov, W, H);
+  drawOverlay(g, W, H, projector(V3.prof, W, H), cAz, cAlt, profView.fov, dpr);
+}
+{ const pc=$('profileCanvas');
+  pc.addEventListener('wheel', e => { e.preventDefault(); profView.fov=Math.max(5,Math.min(120,profView.fov*(e.deltaY<0?.85:1/.85))); drawProfile(); }, { passive:false });
+  pc.addEventListener('pointerdown', e => { if (e.button) return; profView.active=true; profView.x=e.clientX; profView.y=e.clientY; pc.setPointerCapture(e.pointerId); });
+  pc.addEventListener('pointermove', e => { if (!profView.active) return; const r=pc.getBoundingClientRect();
+    profView.az -= (e.clientX-profView.x)/r.width*profView.fov; profView.alt += (e.clientY-profView.y)/r.width*profView.fov;
+    profView.x=e.clientX; profView.y=e.clientY; drawProfile(); refreshPanMeta(); });
+  pc.addEventListener('pointerup', () => profView.active=false);
+  pc.addEventListener('dblclick', () => { profView.az=0; profView.alt=0; profView.fov=skyView.zoom; drawProfile(); });
+}
+function drawProfile2D(){
+  const cv=$('profileCanvas'), box=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  const W=Math.max(320,box.width), H=Math.max(150,box.height);
+  if (cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); }
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const horizon=H*.42, ground=H*.82, line=sightLine(), t=curTime(), obs=observer();
+  const sun=bodyPos('Sun',t,obs), moon=bodyPos('Moon',t,obs);
+  const sky=g.createLinearGradient(0,0,0,H); sky.addColorStop(0,'rgba(35,61,94,.92)'); sky.addColorStop(1,'rgba(8,19,29,.82)'); g.fillStyle=sky; g.fillRect(0,0,W,H);
+  g.strokeStyle='rgba(255,255,255,.12)'; g.lineWidth=1;
+  for(let i=1;i<5;i++){ const y=horizon+(ground-horizon)*i/5; g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+  // distant and near hills, with a repeatable shape so the scene does not jump while scrubbing time
+  g.fillStyle='rgba(63,107,91,.72)'; g.beginPath(); g.moveTo(0,ground);
+  for(let x=0;x<=W;x+=12){ const y=horizon+54+Math.sin(x*.014)*19+Math.sin(x*.041)*10; g.lineTo(x,y); } g.lineTo(W,ground); g.closePath(); g.fill();
+  g.fillStyle='rgba(45,78,71,.95)'; g.beginPath(); g.moveTo(0,ground);
+  for(let x=0;x<=W;x+=10){ const y=horizon+115+Math.sin(x*.021+1)*25+Math.sin(x*.063)*13; g.lineTo(x,y); } g.lineTo(W,ground); g.closePath(); g.fill();
+  // road and lane markings receding toward the vanishing point
+  g.fillStyle='rgba(44,47,54,.95)'; g.beginPath(); g.moveTo(W*.43,ground); g.lineTo(W*.57,ground); g.lineTo(W*.505,horizon+78); g.lineTo(W*.495,horizon+78); g.closePath(); g.fill();
+  g.strokeStyle='rgba(250,203,77,.8)'; g.setLineDash([10,9]); g.beginPath(); g.moveTo(W*.5,ground); g.lineTo(W*.5,horizon+78); g.stroke(); g.setLineDash([]);
+  // simple building massing in the corridor
+  const buildings=[[.16,.19,.12],[.25,.27,.22],[.68,.16,.16],[.77,.25,.13],[.86,.12,.2]];
+  buildings.forEach(([x,w,h],i)=>{ const base=horizon+115+(i%2)*18, bw=W*w, bh=H*h; g.fillStyle=i%2?'rgba(116,126,137,.88)':'rgba(91,105,119,.9)'; g.fillRect(W*x,base-bh,bw,bh); g.fillStyle='rgba(239,211,125,.55)'; for(let yy=base-bh+12;yy<base-5;yy+=15) for(let xx=W*x+8;xx<W*x+bw-5;xx+=14) g.fillRect(xx,yy,5,5); });
+  // sight rays use the eye position and actual current azimuth/altitude values
+  // West-facing 180° view: azimuth 180° to 360°, with the camera centered.
+  const eyeX=W*.5, eyeY=ground-10, farX=W*.04;
+  const westX = az => Math.max(0, Math.min(W, (az-180)/180*W));
+  const rayY=alt => eyeY-(alt-line.alt)*H/Math.max(8,Math.abs(line.alt)+12)-18;
+  const rayX = az => westX(az);
+  const ray=(p,col,label)=>{ const y=Math.max(16,Math.min(H-20,rayY(p.alt))); g.strokeStyle=col; g.lineWidth=3; g.beginPath(); g.moveTo(eyeX,eyeY); g.lineTo(farX,y); g.stroke(); g.fillStyle=col; g.beginPath(); g.arc(farX,y,5,0,Math.PI*2); g.fill(); g.font='12px Segoe UI'; g.fillText(`${label} ${p.az.toFixed(1)}° / ${p.alt.toFixed(1)}°`,Math.max(8,farX-150),Math.max(14,y-9)); };
+  ray(sun,'#ffb02e','☀'); ray(moon,'#69b7ff','☾');
+  g.fillStyle='#ff4d6d'; g.beginPath(); g.arc(eyeX,eyeY,6,0,Math.PI*2); g.fill(); g.fillStyle='rgba(255,255,255,.9)'; g.font='12px Segoe UI'; g.fillText(`眼高 ${S.cam[2].toFixed(1)} m`,eyeX+10,eyeY-10);
+  g.strokeStyle='rgba(255,77,109,.95)'; g.lineWidth=2; g.setLineDash([7,5]); g.beginPath(); g.moveTo(eyeX,eyeY); g.lineTo(farX,rayY(line.alt)); g.stroke(); g.setLineDash([]);
+  g.fillStyle='rgba(255,255,255,.7)'; g.fillText(`直線視線 ${ (line.dist/1000).toFixed(2)} km · Alt ${line.alt.toFixed(2)}°`,12,H-12);
+}
+if (window.ResizeObserver) {
+  const ro=new ResizeObserver(() => { drawSky(); drawProfile(); });
+  ro.observe($('sky')); ro.observe($('profile'));
+}
+window.addEventListener('resize',() => { drawSky(); drawProfile(); });
+
+// ---------- 3D real-scene views (Cesium + LandsD 3D Spatial Data) ----------
+// API key per LandsD (GIS Projects Section, SMO) terms; kept in git-ignored config.js.
+const HK3D_KEY = window.HK3D_KEY || localStorage.getItem('hk3dKey') || '';
+const V3 = { sky:null, prof:null, ground:null };
+const HK_BOX = [113.75, 22.13, 114.45, 22.58];   // lon/lat bbox
+// DEM (hills): AWS Terrain Tiles (Terrarium PNG, public, no key), z ≤ 15
+const demCache = new Map();
+function demTile(z,x,y){
+  const k=`${z}/${x}/${y}`;
+  if (!demCache.has(k)) demCache.set(k, new Promise(res => {
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); g.drawImage(img,0,0);
+      const d=g.getImageData(0,0,256,256).data, h=new Float32Array(65536);
+      for (let i=0;i<65536;i++) h[i]=Math.max(0, d[4*i]*256+d[4*i+1]+d[4*i+2]/256-32768);
+      res(h); };
+    img.onerror=()=>res(null);
+    img.src=`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${k}.png`;
+  }));
+  return demCache.get(k);
+}
+const tLon=(x,z)=>x/2**z*360-180, tLat=(y,z)=>deg(Math.atan(Math.sinh(Math.PI*(1-2*y/2**z))));
+function bilin(h,u,v){ const x0=Math.min(254,Math.floor(u)), y0=Math.min(254,Math.floor(v)), fx=u-x0, fy=v-y0, i=y0*256+x0;
+  return h[i]*(1-fx)*(1-fy)+h[i+1]*fx*(1-fy)+h[i+256]*(1-fx)*fy+h[i+257]*fx*fy; }
+function demHeight(lat, lon){
+  const z=15, n=2**z, fx=(lon+180)/360*n, fy=(1-Math.log(Math.tan(rad(lat))+1/Math.cos(rad(lat)))/Math.PI)/2*n;
+  return demTile(z,Math.floor(fx),Math.floor(fy)).then(h => h ? bilin(h,(fx%1)*255,(fy%1)*255) : null);
+}
+function makeTerrain(){
+  const N=65;
+  return new Cesium.CustomHeightmapTerrainProvider({ width:N, height:N, tilingScheme:new Cesium.WebMercatorTilingScheme(),
+    callback:(x,y,level) => {
+      const flat=new Float32Array(N*N);
+      if (level<8 || tLon(x+1,level)<HK_BOX[0] || tLon(x,level)>HK_BOX[2] || tLat(y,level)<HK_BOX[1] || tLat(y+1,level)>HK_BOX[3]) return flat;
+      const zs=Math.min(level,15), s=2**(level-zs), tx=Math.floor(x/s), ty=Math.floor(y/s), ox=x-tx*s, oy=y-ty*s;
+      return demTile(zs,tx,ty).then(h => { if (!h) return flat;
+        for (let j=0;j<N;j++) for (let i=0;i<N;i++) flat[j*N+i]=bilin(h,(ox+i/(N-1))/s*255,(oy+j/(N-1))/s*255);
+        return flat; });
+    } });
+}
+function make3D(el){
+  const imagery=new Cesium.UrlTemplateImageryProvider({ url:'https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/imagery/wgs84/{z}/{x}/{y}.png',
+    minimumLevel:10, maximumLevel:19, rectangle:Cesium.Rectangle.fromDegrees(...HK_BOX), credit:'© 地政總署 Lands Department' });
+  const v=new Cesium.Viewer(el, { baseLayer:new Cesium.ImageryLayer(imagery), terrainProvider:makeTerrain(),
+    animation:false, timeline:false, baseLayerPicker:false, geocoder:false, homeButton:false, sceneModePicker:false,
+    navigationHelpButton:false, fullscreenButton:false, infoBox:false, selectionIndicator:false, skyBox:false,
+    requestRenderMode:true, maximumRenderTimeChange:Infinity });
+  const sc=v.scene;
+  if (sc.sun) sc.sun.show=false; if (sc.moon) sc.moon.show=false;   // drawn by our overlay (accurate, true size)
+  if (sc.skyAtmosphere) sc.skyAtmosphere.show=false; sc.globe.showGroundAtmosphere=false; sc.fog.enabled=false;
+  sc.backgroundColor=Cesium.Color.fromCssColorString('#3c6a9a');   // constant sky so silhouettes stay visible at night
+  sc.screenSpaceCameraController.enableInputs=false;
+  sc.globe.depthTestAgainstTerrain=true; sc.globe.baseColor=Cesium.Color.fromCssColorString('#22333a');
+  sc.globe.maximumScreenSpaceError=1.5;
+  if (HK3D_KEY) for (const ts of ['building','infrastructure'])
+    Cesium.Cesium3DTileset.fromUrl(`https://data.map.gov.hk/api/3d-data/3dsd/WGS84/${ts}/tileset.json?key=${HK3D_KEY}`, { maximumScreenSpaceError:8 })
+      .then(t => { sc.primitives.add(t); sc.requestRender(); }).catch(e => console.warn('3D tileset', ts, e));
+  return v;
+}
+function init3D(){
+  if (typeof Cesium==='undefined') return;              // offline → 2D fallback
+  try { V3.sky=make3D($('sky3d')); V3.prof=make3D($('prof3d')); }
+  catch(e){ console.warn('3D init failed', e); V3.sky=V3.prof=null; }
+}
+function refreshGround(){
+  const c=S.cam.slice(); V3.ground=null;
+  demHeight(c[0],c[1]).then(h => { if (S.cam[0]===c[0] && S.cam[1]===c[1]){
+    V3.ground=h;
+    // Recompute the line and celestial topocentric position after the DEM
+    // resolves, because camera height is entered as AGL.
+    computeDay(); riseSet(); buildTrailTable(); update();
+  } });
+}
+function cameraElevationMpd(){
+  // cam[2] is AGL (the field camera height), while Cesium needs mPD.
+  return V3.ground==null ? S.cam[2] : V3.ground + Math.max(0.1, S.cam[2]);
+}
+function setCam3D(v, az, alt, fov, W, H){
+  // fov is the horizontal photographic FOV. Cesium's fov is vertical on
+  // a landscape canvas, so convert it before rendering the buildings.
+  const aspect=Math.max(0.1, W/H);
+  const vfov=2*Math.atan(Math.tan(rad(fov)/2)/aspect);
+  const h=cameraElevationMpd();
+  v.camera.frustum.aspectRatio=aspect;
+  v.camera.frustum.fov=vfov;
+  v.camera.frustum.near=nearClipM;   // hide distorted nearby geometry when >0.1
+  // Cesium pitch is positive upward from the local horizontal plane
+  // (pitch -90 deg = looking straight down, per Cesium docs), i.e. the same
+  // sign convention as astronomical altitude.  Pass altitude through
+  // unchanged so the real-scene camera aims at (az, alt) and the building
+  // view and overlay share the same vertical convention.
+  v.camera.setView({ destination:Cesium.Cartesian3.fromDegrees(S.cam[1],S.cam[0],h), orientation:{ heading:rad(az), pitch:rad(alt), roll:0 } });
+  v.clock.currentTime=Cesium.JulianDate.fromDate(curTime());
+  v.scene.requestRender();
+}
+// exact pinhole projection matching Cesium's camera (fov = larger canvas dimension)
+function projector(v, W, H){
+  const C=Cesium.Cartesian3, cam=v.camera, M=Cesium.Transforms.eastNorthUpToFixedFrame(cam.positionWC);
+  // Square pixels: the horizontal focal length in pixels equals the vertical
+  // one (fx == fy).  The old code used fx = fy*(W/H), which stretched every
+  // projected point horizontally by the panel aspect ratio and moved Sun/Moon
+  // off their true azimuth on the wide grey panels.
+  const fy=(H/2)/Math.tan(cam.frustum.fov/2), fx=fy;
+  const R=C.clone(cam.rightWC), U=C.clone(cam.upWC), D=C.clone(cam.directionWC), w=new C();
+  return (az, alt) => {
+    const ca=Math.cos(rad(alt));
+    Cesium.Matrix4.multiplyByPointAsVector(M, new C(ca*Math.sin(rad(az)), ca*Math.cos(rad(az)), Math.sin(rad(alt))), w);
+    const z=C.dot(w,D); if (z<=1e-3) return null;
+    return [W/2+fx*C.dot(w,R)/z, H/2-fy*C.dot(w,U)/z];
+  };
+}
+// overlay: grid, horizon, full-day sun/moon trails with hour labels, true-size discs, target cross
+function drawOverlay(g, W, H, P, cAz, cAlt, fov, k=W/1120){
+  const line=sightLine(), t=curTime(), obs=observer();
+  const pxDeg=((W/2)/Math.tan(rad(fov)/2))*rad(1);
+  g.clearRect(0,0,W,H); g.font=`${Math.round(13*k)}px Segoe UI`;
+  const poly=(pts,col,lw,dash)=>{ g.strokeStyle=col; g.lineWidth=lw; g.setLineDash(dash||[]); g.beginPath(); let pr=null;
+    for (const p of pts){ if (p && pr && Math.hypot(p[0]-pr[0],p[1]-pr[1])<W) g.lineTo(p[0],p[1]); else if (p) g.moveTo(p[0],p[1]); pr=p; }
+    g.stroke(); g.setLineDash([]); };
+  const span=Math.min(180,fov*1.2), gs=niceStep(fov/6), lo=Math.max(-89,cAlt-span), hi=Math.min(89,cAlt+span);
+  const steps=k=>Array.from({length:41},(_,i)=>i/40);
+  g.fillStyle='rgba(255,255,255,.75)';
+  for (let a=Math.ceil((cAz-span)/gs)*gs; a<=cAz+span; a+=gs){
+    poly(steps().map(s=>P(a,lo+(hi-lo)*s)),'rgba(255,255,255,.18)',1);
+    const p=P(a,cAlt); if (p) g.fillText(`${+(((a%360)+360)%360).toFixed(2)}°`, p[0]+3, H-6*k);
+  }
+  for (let h=Math.ceil(lo/gs)*gs; h<=hi; h+=gs){
+    poly(steps().map(s=>P(cAz-span+2*span*s,h)),'rgba(255,255,255,.18)',1);
+    const p=P(cAz,h); if (p) g.fillText(`${+h.toFixed(2)}°`, 4*k, p[1]-4*k);
+  }
+  poly(steps().map(s=>P(cAz-span+2*span*s,0)),'rgba(120,255,160,.7)',2*k,[8*k,6*k]);
+  const t0=dayStart().getTime();
+  for (const [arr,col] of [[day.sun,'#ffb02e'],[day.moon,'#69b7ff']]){
+    poly(arr.map(p=>P(p.az,p.alt)), col, 2.5*k);
+    g.fillStyle=col;
+    arr.forEach((p,m)=>{ const q=P(p.az,p.alt); if (!q || q[0]<-20||q[0]>W+20||q[1]<-20||q[1]>H+20) return;
+      if (pxDeg*.25>6*k){ g.beginPath(); g.arc(q[0],q[1],2*k,0,7); g.fill(); }
+      if (m%60===0){ g.beginPath(); g.arc(q[0],q[1],4*k,0,7); g.fill(); g.fillText(hkTime(new Date(t0+m*60e3),false), q[0]+6*k, q[1]-6*k); } });
+  }
+  for (const b of ['Sun','Moon']){
+    const p=bodyPos(b,t,obs), q=P(p.az,p.alt); if (!q) continue;
+    const r=Math.max(4*k, p.diam/2*pxDeg);
+    g.fillStyle=b==='Sun'?'rgba(255,190,70,.9)':'rgba(105,183,255,.96)'; g.shadowColor=g.fillStyle; g.shadowBlur=12*k;
+    g.beginPath(); g.arc(q[0],q[1],r,0,7); g.fill(); g.shadowBlur=0;
+    g.fillText(`${b==='Sun'?'☀':'☾'} ${p.az.toFixed(2)}° / ${p.alt.toFixed(2)}°`, q[0]+r+6*k, q[1]+4*k);
+  }
+  const tq=P(line.az,line.alt);
+  if (tq){ const [tx,ty]=tq, L=20*k; g.strokeStyle='#ff4d6d'; g.lineWidth=2*k;
+    g.beginPath(); g.moveTo(tx-L,ty); g.lineTo(tx+L,ty); g.moveTo(tx,ty-L); g.lineTo(tx,ty+L); g.stroke();
+    g.setLineDash([6*k,6*k]); g.beginPath(); g.arc(tx,ty,Math.max(8*k,+$('tol').value*pxDeg),0,7); g.stroke(); g.setLineDash([]); }
+  g.fillStyle='rgba(0,0,0,.45)'; g.fillRect(W-260*k,6*k,254*k,24*k);
+  g.fillStyle='#fff'; g.fillText(`${hkTime(t)}  視角 ${fov.toFixed(fov<10?2:0)}° ≈ ${Math.round(18/Math.tan(rad(fov)/2))}mm`, W-252*k, 23*k);
+  if (!HK3D_KEY){ g.fillStyle='#ffb02e'; g.fillText('未設定 3D API key（config.js）— 只顯示山形', 8*k, 20*k); }
+}
+
+// ---------- update ----------
+function updateSceneMeta(sun, moon, line){
+  const gps=`Camera (Lon, Lat, H): ${S.cam[1].toFixed(7)}, ${S.cam[0].toFixed(7)}, ${S.cam[2].toFixed(1)}m<br>Target (Lon, Lat): ${S.tgt[1].toFixed(7)}, ${S.tgt[0].toFixed(7)}`;
+  const body=`<span class="sun">☀ Sun Azi ${sun.az.toFixed(3)}° · Alt ${sun.alt.toFixed(3)}°</span><br><span class="moon">☾ Moon Azi ${moon.az.toFixed(3)}° · Alt ${moon.alt.toFixed(3)}°</span>`;
+  const t=hkTime(curTime(),false), f=v=>`${v>=0?'+':''}${v.toFixed(1)}°`;
+  // each 3D box pans independently; show the pan offset so a panned view is obvious
+  const pans={ skyInfo:skyPan, profileInfo:profView };
+  for (const id of ['skyInfo','profileInfo']){
+    const p=pans[id], on=Math.abs(p.az)>0.005||Math.abs(p.alt)>0.005;
+    const view=`View Azi ${line.az.toFixed(3)}° · Alt ${line.alt.toFixed(3)}°${on?`（pan ${f(p.az)} / ${f(p.alt)}）`:''} · ${t}`;
+    $(id).innerHTML=`<span class="gps">${gps}</span><br>${view}<br>${body}`;
+  }
+}
+// refresh the info-panel pan display during drag (drawSky/drawProfile don't call update())
+function refreshPanMeta(){
+  const t=curTime(), line=sightLine(), obs=observer();
+  updateSceneMeta(bodyPos('Sun',t,obs), bodyPos('Moon',t,obs), line);
+}
+function update(){
+  save();
+  const t=curTime(), line=sightLine(), obs=observer();
+  $('clock').textContent=hkTime(t,false);
+  const sun=bodyPos('Sun',t,obs), moon=bodyPos('Moon',t,obs);
+  const sel=S.body==='Sun'?sun:moon, d=angSep(sel.az,sel.alt,line.az,line.alt), tol=+$('tol').value;
+  const aligned = d<=tol;
+  if (aligned && !wasAligned) beep();
+  wasAligned=aligned;
+  const ill=A.Illumination('Moon',t).phase_fraction*100;
+  updateSceneMeta(sun, moon, line);
+  $('bodyInfo').innerHTML = `
+    <b class="sun"><span class="sun-icon">☀</span> Azi / Alt</b><span>${sun.az.toFixed(3)}° / ${sun.alt.toFixed(3)}°</span>
+    <b class="sun"><span class="sun-icon">☀</span> 角直徑</b><span>${(sun.diam*60).toFixed(2)}′</span>
+    <b class="moon"><span class="moon-icon">🔵</span> Azi / Alt</b><span>${moon.az.toFixed(3)}° / ${moon.alt.toFixed(3)}°</span>
+    <b class="moon"><span class="moon-icon">🔵</span> 角直徑</b><span>${(moon.diam*60).toFixed(2)}′ · ${Math.round(moon.km).toLocaleString()} km</span>
+    <b class="moon"><span class="moon-icon">🔵</span> 月相</b><span>${ill.toFixed(1)}%</span>
+    <b>與視線差 Δ</b><span class="${aligned?'ok':''}">${d.toFixed(3)}° ${aligned?'🔔 對準':''}</span>
+    <b>ΔAzi / ΔAlt</b><span>${(((sel.az-line.az+540)%360)-180).toFixed(3)}° / ${(sel.alt-line.alt).toFixed(3)}°</span>`;
+  sunL.setLatLngs([S.cam, dest(S.cam[0],S.cam[1],sun.az,40000)]);
+  moonL.setLatLngs([S.cam, dest(S.cam[0],S.cam[1],moon.az,40000)]);
+  sunL.setStyle({ opacity: sun.alt>0?1:.55, dashArray: sun.alt>0?null:'8 8' });
+  moonL.setStyle({ color:'#2f8ff0', weight:4, opacity: moon.alt>0?1:.6, dashArray: moon.alt>0?null:'8 8' });
+  drawSky(); drawProfile();
+}
+function fullUpdate(){
+  camM.setLatLng(S.cam); tgtM.setLatLng(S.tgt); sightL.setLatLngs([S.cam,S.tgt]);
+  const line=sightLine();
+  $('lineInfo').innerHTML = `<b>方位角 Azi</b><span>${line.az.toFixed(3)}°</span><b>仰角 Alt</b><span>${line.alt.toFixed(3)}° <span class="small">(已計地球曲率+折射)</span></span>
+    <b>距離</b><span>${line.dist<1000?line.dist.toFixed(1)+' m':(line.dist/1000).toFixed(3)+' km'}</span>`;
+  computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; refreshGround(); update();
+  applyHideBld(); applyHideTerrain(); refreshLandmarks();
+  scheduleYearSearch();
+}
+
+// ---------- tab 2: 5-year same-angle search ----------
+let yJob=0, yDirty=true, yTimer=null;
+function showTab(n){
+  $('tab1').classList.toggle('active', n===1); $('tab2').classList.toggle('active', n===2);
+  $('tabBtn1').classList.toggle('active', n===1); $('tabBtn2').classList.toggle('active', n===2);
+  if (n===2 && yDirty) runYearSearch();
+}
+$('tabBtn1').onclick = () => showTab(1); $('tabBtn2').onclick = () => showTab(2);
+$('yRun').onclick = runYearSearch; $('yAltTol').onchange = runYearSearch; $('yAziTol').onchange = runYearSearch; $('tol').addEventListener('change', scheduleYearSearch);
+function scheduleYearSearch(){
+  yDirty=true; yJob++;                       // cancel any running search
+  $('yStatus').textContent='位置已改變，等待重新搜尋…';
+  clearTimeout(yTimer);
+  if ($('tab2').classList.contains('active')) yTimer=setTimeout(runYearSearch, 400);
+}
+function runYearSearch(){
+  yDirty=false; const job=++yJob;
+  const line=sightLine(), obs=observer(), body=S.body, altTol=+$('yAltTol').value, aziTol=+$('yAziTol').value;
+  const t0=dayStart().getTime(), tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+5);
+  const end=tEnd.getTime(), STEP=20*60e3, hits=[];
+  const sepT = t => { const p=bodyPos(body,new Date(t),obs); return angSep(p.az,p.alt,line.az,line.alt); };
+  const bodyIcon = body==='Sun' ? '<span class="sun-icon">☀</span>' : '<span class="moon-icon">🔵</span>';
+  const head=`<tr><th>日期</th><th>時間</th><th class="moon">${bodyIcon}Azi</th><th class="moon">${bodyIcon}Alt</th><th>ΔAzi</th><th>ΔAlt</th></tr>`;
+  $('yearTbl').innerHTML=head;
+  let t=t0, s0=sepT(t0-STEP), s1=sepT(t0);
+  function chunk(){
+    if (job!==yJob) return;                    // superseded by a newer change
+    const stop=Math.min(end, t+30*86400e3);
+    while (t<stop){
+      const s2=sepT(t+STEP);
+      if (s1<=s0 && s1<=s2 && s1<=aziTol+altTol+2){   // closest approach of this pass
+        let a=t-STEP, b=t+STEP; const g=(Math.sqrt(5)-1)/2;
+        while (b-a>1000){ const c=b-g*(b-a), d=a+g*(b-a); if (sepT(c)<sepT(d)) b=d; else a=c; }
+        const tm=(a+b)/2, p=bodyPos(body,new Date(tm),obs), da=p.alt-line.alt, dz=((p.az-line.az+540)%360)-180;
+        if (Math.abs(da)<=altTol && Math.abs(dz)<=aziTol && p.alt>-1 && tm>=t0) hits.push({t:tm, p, da, dz});
+      }
+      t+=STEP; s0=s1; s1=s2;
+    }
+    $('yStatus').textContent=`搜尋中… ${hkDateStr(new Date(t))} · 已找到 ${hits.length}`;
+    if (t<end) { setTimeout(chunk, 0); return; }
+    $('yStatus').innerHTML=`${body==='Sun'?'☀':'🔵'} 視線 Azi ${line.az.toFixed(2)}° Alt ${line.alt.toFixed(2)}° · Azi ±${aziTol}°、Alt ±${altTol}° · 共 ${hits.length} 次（按列跳至該時間）`;
+    const MAX=150, shown=hits.slice(0,MAX), tol=+$('tol').value, sg=v => (v>=0?'+':'')+v.toFixed(2);
+    $('yearTbl').innerHTML = head + (hits.length ? shown.map(h => { const okA=Math.abs(h.da)<=tol, okZ=Math.abs(h.dz)<=tol, y=okA&&okZ?' style="color:#ffe14d;font-weight:700"':(okA||okZ)?' style="color:#d9b3ff;font-weight:700"':'';
+      return `<tr class="hit" data-t="${h.t}"><td${y}>${hkDateStr(new Date(h.t))}</td><td${y}>${hkTime(new Date(h.t),false)}</td><td${y}>${h.p.az.toFixed(2)}</td><td${y}>${h.p.alt.toFixed(2)}</td><td class="${okZ?'ok':''}">${sg(h.dz)}</td><td class="${okA?'ok':''}">${sg(h.da)}</td></tr>`; }).join('')
+      + (hits.length>MAX ? `<tr><td colspan="6" style="text-align:center">… 另有 ${hits.length-MAX} 項</td></tr>` : '')
+      : `<tr><td colspan="6" style="text-align:center">（沒有符合項目）</td></tr>`);
+    $('yearTbl').querySelectorAll('tr.hit').forEach(r => r.onclick = () => {
+      const tt=+r.dataset.t; S.date=hkDateStr(new Date(tt)); S.min=Math.round((tt-dayStart().getTime())/60e3);
+      fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
+    });
+  }
+  chunk();
+}
+
+init3D(); fillInputs(); fullUpdate(); drawProfile();
+</script>
+</body>
+</html>

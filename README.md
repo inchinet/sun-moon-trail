@@ -2,8 +2,8 @@
 
 > 一個給攝影師用的**香港境內日／月拍攝規劃工具**，類似「巧攝 PlanIt Pro」，但專門用香港地政總署（LandsD）的 **3D 地圖數據**，準確計算太陽／月亮會在哪一天、哪一個時間，出現在山頭、建築物或標高柱後方。
 
-![map](https://github.com/inchinet/sunmoon/blob/main/screen.png)
-![5year](https://github.com/inchinet/sunmoon/blob/main/screen2.png)
+![map](https://github.com/inchinet/sun-moon-trail/blob/main/screen.png)
+![5year](https://github.com/inchinet/sun-moon-trail/blob/main/screen2.png)
 
 - **先做網頁版**（電腦／手機瀏覽器都能用），最後才考慮做手機 App。
 - **首次使用需要連網**，之後可以**離線使用**。只在需要時才用 Google Map。

@@ -33,6 +33,7 @@
   .tabpane > * { flex-shrink:0; }
   #tab1 > #trailWrap { flex:1 1 0; min-height:240px; overflow:auto; }
   #tab2 > #yearWrap { flex:1 1 0; min-height:240px; overflow:auto; }
+  #tab3 > #eclipseWrap { flex:1 1 0; min-height:240px; overflow:auto; }
   #sky   { top:12px; right:12px; width:min(560px, calc(100vw - 380px)); min-width:320px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
   #skyCanvas { cursor:grab; touch-action:none; }
   #skyCanvas.is-panning { cursor:grabbing; }
@@ -88,7 +89,7 @@
 
 <div id="panel" class="glass">
   <h1><span class="sun-icon">☀</span><span class="moon-icon">🔵</span> 日月路線 HK</h1>
-  <div class="tabs"><button id="tabBtn1" class="active">主頁</button><button id="tabBtn2"><span id="yearTabIcon" class="moon-icon">🔵</span> 五年相同角度</button></div>
+  <div class="tabs"><button id="tabBtn1" class="active">主頁</button><button id="tabBtn2"><span id="yearTabIcon" class="moon-icon">🔵</span> 五年相同角度</button><button id="tabBtn3">🌒 日食／月食</button></div>
   <div id="tab2" class="tabpane">
     <div class="small">由所選日期起五年內，所選天體（<span class="sun-icon">☀</span>/<span class="moon-icon">🔵</span>）每次最接近 📷→🎯 視線的時刻，且 ΔAzi、ΔAlt 分別在下方「Azi 容差」「Alt 容差」內。ΔAzi/ΔAlt 綠色 = ≤ 主頁「對準容差」；兩者皆綠時該列黃色（日/月正落在被攝點上），只有一項綠時該列淺紫色。相機/被攝點/天體/日期/容差改變時自動重新搜尋。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
@@ -98,6 +99,14 @@
     </div>
     <div id="yStatus" class="small">—</div>
     <div id="yearWrap"><table id="yearTbl"></table></div>
+  </div>
+  <div id="tab3" class="tabpane">
+    <div class="small">由所選日期起五年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻。</div>
+    <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
+      <button id="eRun" style="margin-left:auto">重新搜尋</button>
+    </div>
+    <div id="eStatus" class="small">—</div>
+    <div id="eclipseWrap"><table id="eclipseTbl"></table></div>
   </div>
   <div id="tab1" class="tabpane active">
   <div style="display:flex; gap:6px; margin-bottom:6px">
@@ -187,7 +196,7 @@ const AU_KM = 149597870.7, R_SUN = 695700, R_MOON = 1737.4;
 // Reproduction setup: pedestrian footbridge, looking west toward 朗庭園.
 // Requested screen4 reproduction scene: 2026-10-24 03:54 HKT, Moon.
 // These camera/target values reproduce the more-correct reference view.
-const def = { date:'2026-10-24', body:'Moon', cam:[22.4445094,114.0322226,6], tgt:[22.4446011,114.0173931,200], min:234, cal:[0,0], landmarks:[] };
+const def = { date:'2026-10-24', body:'Moon', cam:[22.4445094,114.0322226,60], tgt:[22.4446011,114.0173931,200], min:234, cal:[0,0], landmarks:[] };
 // Use a scene-specific key so an older saved scene cannot hide this default.
 const SETTINGS_KEY = 'smt-screen4-reference-v2';
 let S = Object.assign({}, def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
@@ -292,13 +301,14 @@ $('skyMode').onchange = drawSky;
 const skyView = { zoom:2*deg(Math.atan(18/300)) };
 $('focal').onchange = () => { const f=+$('focal').value; if (f){ skyView.zoom = 2*deg(Math.atan(18/f)); profView.fov=skyView.zoom; skyPan.az=0; skyPan.alt=0; drawSky(); drawProfile(); } };
 // center the VR view on the selected Sun/Moon (useful for framing the shot)
-$('centerBody').onclick = () => {
+function centerOnBody(){
   if ($('skyMode').value === 'full') return;
   const line=sightLine(), p=bodyPos(S.body,curTime(),observer());
   let dAz=p.az-line.az; dAz=((dAz+540)%360)-180;   // wrap to [-180,180]
   skyPan.az=dAz; skyPan.alt=p.alt-line.alt;
-  drawSky();
-};
+  drawSky(); refreshPanMeta();
+}
+$('centerBody').onclick = centerOnBody;
 // hide/show all 3D building tilesets (reliable toggle when nearby blocks occlude the view)
 function applyHideBld(){
   const hide=$('hideBld')?.checked||false;
@@ -871,17 +881,19 @@ function fullUpdate(){
     <b>距離</b><span>${line.dist<1000?line.dist.toFixed(1)+' m':(line.dist/1000).toFixed(3)+' km'}</span>`;
   computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; refreshGround(); update();
   applyHideBld(); applyHideTerrain(); refreshLandmarks();
-  scheduleYearSearch();
+  scheduleYearSearch(); scheduleEclipseSearch();
 }
 
 // ---------- tab 2: 5-year same-angle search ----------
 let yJob=0, yDirty=true, yTimer=null;
+let eJob=0, eDirty=true;
 function showTab(n){
-  $('tab1').classList.toggle('active', n===1); $('tab2').classList.toggle('active', n===2);
-  $('tabBtn1').classList.toggle('active', n===1); $('tabBtn2').classList.toggle('active', n===2);
+  $('tab1').classList.toggle('active', n===1); $('tab2').classList.toggle('active', n===2); $('tab3').classList.toggle('active', n===3);
+  $('tabBtn1').classList.toggle('active', n===1); $('tabBtn2').classList.toggle('active', n===2); $('tabBtn3').classList.toggle('active', n===3);
   if (n===2 && yDirty) runYearSearch();
+  if (n===3 && eDirty) runEclipseSearch();
 }
-$('tabBtn1').onclick = () => showTab(1); $('tabBtn2').onclick = () => showTab(2);
+$('tabBtn1').onclick = () => showTab(1); $('tabBtn2').onclick = () => showTab(2); $('tabBtn3').onclick = () => showTab(3);
 $('yRun').onclick = runYearSearch; $('yAltTol').onchange = runYearSearch; $('yAziTol').onchange = runYearSearch; $('tol').addEventListener('change', scheduleYearSearch);
 function scheduleYearSearch(){
   yDirty=true; yJob++;                       // cancel any running search
@@ -926,6 +938,75 @@ function runYearSearch(){
     });
   }
   chunk();
+}
+
+$('eRun').onclick = runEclipseSearch;
+function scheduleEclipseSearch(){
+  eDirty=true; eJob++;
+  const st=$('eStatus'); if (st) st.textContent='位置已改變，等待重新搜尋…';
+}
+// ---------- tab 3: eclipse search (5 years) ----------
+let eclipseRows=[];
+function runEclipseSearch(){
+  eDirty=false; const job=++eJob;
+  const obs=observer();
+  const t0=dayStart().getTime();
+  const tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+5);
+  const end=tEnd.getTime();
+  const rows=[];
+  const kindZh={partial:'偏食', annular:'環食', total:'全食', penumbral:'半影月食'};
+  $('eStatus').textContent='搜尋中…';
+  // Solar eclipses visible at camera location
+  try {
+    let d=new Date(t0), n=0;
+    while (n<40){
+      if (job!==eJob) return;
+      const e=A.SearchLocalSolarEclipse(d, obs);
+      const pt=e.peak.time.date.getTime();
+      if (pt>=end) break;
+      if (e.obscuration>0.001 && e.peak.altitude>0){
+        const sp=bodyPos('Sun', e.peak.time.date, obs);
+        rows.push({t:pt, type:'☀ 日食', kind:kindZh[e.kind]||e.kind,
+          obsc:(e.obscuration*100).toFixed(1)+'%', begin:e.partial_begin.time.date.getTime(), endt:e.partial_end.time.date.getTime(),
+          az:sp.az, alt:sp.alt, body:'Sun'});
+      }
+      d=new Date(pt+86400000); n++;
+    }
+  } catch(err){}
+  // Lunar eclipses with moon above horizon at peak
+  try {
+    let d=new Date(t0), n=0;
+    while (n<40){
+      if (job!==eJob) return;
+      const m=A.SearchLunarEclipse(d);
+      const pt=m.peak.date.getTime();
+      if (pt>=end) break;
+      const mp=bodyPos('Moon', m.peak.date, obs);
+      if (mp.alt>0){
+        rows.push({t:pt, type:'🌙 月食', kind:kindZh[m.kind]||m.kind,
+          obsc:m.kind==='total'?'100%':(m.obscuration*100).toFixed(1)+'%',
+          begin:pt-m.sd_penum*60000, endt:pt+m.sd_penum*60000,
+          az:mp.az, alt:mp.alt, body:'Moon'});
+      }
+      d=new Date(pt+86400000*30); n++;
+    }
+  } catch(err){}
+  rows.sort((a,b)=>a.t-b.t);
+  eclipseRows=rows;   // for overlay eclipse rendering
+  const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th></tr>`;
+  $('eStatus').textContent=`未來五年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻）`;
+  $('eclipseTbl').innerHTML = head + (rows.length ? rows.map(r =>
+    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateStr(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
+  ).join('') : `<tr><td colspan="9" style="text-align:center">（五年內無可見日／月食）</td></tr>`);
+  $('eclipseTbl').querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
+    const tt=+tr.dataset.t;
+    S.body=tr.dataset.body; S.date=hkDateStr(new Date(tt));
+    // set time to peak (minutes from day start)
+    const ds=dayStart().getTime();
+    S.min=Math.max(0, Math.min(1439, Math.round((tt-ds)/60000)));
+    fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
+    centerOnBody();   // auto-aim VR at the eclipsed sun/moon
+  });
 }
 
 init3D(); fillInputs(); fullUpdate(); drawProfile();

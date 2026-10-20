@@ -1,6 +1,6 @@
 # 🌗 日月路線 Sun-Moon Trail（香港）
 
-> 一個給攝影師用的\\\*\\\*香港境內日／月拍攝規劃工具\\\*\\\*，類似「巧攝 PlanIt Pro」，但專門用香港地政總署（LandsD）的 \\\*\\\*3D 地圖數據\\\*\\\*，準確計算太陽／月亮會在哪一天、哪一個時間，出現在山頭、建築物或標高柱後方。
+> 一個給攝影師用的**香港境內日／月拍攝規劃工具**，類似「巧攝 PlanIt Pro」，但專門用香港地政總署（LandsD）的 **3D 地圖數據**，準確計算太陽／月亮會在哪一天、哪一個時間，出現在山頭、建築物或標高柱後方。
 
 ![map](https://github.com/inchinet/sun-moon-trail/blob/main/screen.png)
 ![5year](https://github.com/inchinet/sun-moon-trail/blob/main/screen2.png)
@@ -79,17 +79,17 @@
 
 ```mermaid
 flowchart TD
-    A\\\["開啟網頁 / 選擇日期時間"] --> B\\\["地圖上點選或輸入 GPS：相機位置 📷"]
-    B --> C\\\["點選或輸入 GPS：被攝位置 🎯（例如標高柱）"]
-    C --> D\\\["App 計算 A→B 視線：方位角 Azi、仰角 Alt、距離"]
+    A["開啟網頁 / 選擇日期時間"] --> B["地圖上點選或輸入 GPS：相機位置 📷"]
+    B --> C["點選或輸入 GPS：被攝位置 🎯（例如標高柱）"]
+    C --> D["App 計算 A→B 視線：方位角 Azi、仰角 Alt、距離"]
     D --> E{"選擇目標：太陽 ☀ / 月亮 🌙"}
-    E --> F\\\["拖動時間軸：日/月位置實時移動"]
+    E --> F["拖動時間軸：日/月位置實時移動"]
     F --> G{"對準？"}
-    G -- "是" --> H\\\["🔔 嗶聲 + 顯示 Alt/Azi"]
+    G -- "是" --> H["🔔 嗶聲 + 顯示 Alt/Azi"]
     G -- "否" --> F
-    E --> I\\\["按「搜尋五年」"]
-    I --> J\\\["列出所有對準的日期時間"]
-    J --> K\\\["點擊任一結果 → 跳到該時間並顯示畫面"]
+    E --> I["按「搜尋五年」"]
+    I --> J["列出所有對準的日期時間"]
+    J --> K["點擊任一結果 → 跳到該時間並顯示畫面"]
 ```
 
 **例子：** 想拍滿月落在山上涼亭後方
@@ -108,16 +108,16 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph Browser\\\["瀏覽器（純前端）"]
-        UI\\\["UI 層<br/>Liquid Glass HTML/CSS"]
-        MAP\\\["2D 地圖 Leaflet<br/>3D 場景 CesiumJS"]
-        ASTRO\\\["天文計算<br/>astronomy-engine"]
-        SEARCH\\\["五年搜尋<br/>主線程執行"]
-        AUDIO\\\["嗶聲<br/>Web Audio API"]
-        STORE\\\["本機儲存<br/>localStorage"]
+    subgraph Browser["瀏覽器（純前端）"]
+        UI["UI 層<br/>Liquid Glass HTML/CSS"]
+        MAP["2D 地圖 Leaflet<br/>3D 場景 CesiumJS"]
+        ASTRO["天文計算<br/>astronomy-engine"]
+        SEARCH["五年搜尋<br/>主線程執行"]
+        AUDIO["嗶聲<br/>Web Audio API"]
+        STORE["本機儲存<br/>localStorage"]
     end
-    LANDSD\\\["LandsD 3D Tiles / 影像圖"] --> MAP
-    TERRAIN\\\["AWS Terrarium DEM 地形"] --> MAP
+    LANDSD["LandsD 3D Tiles / 影像圖"] --> MAP
+    TERRAIN["AWS Terrarium DEM 地形"] --> MAP
     UI --> MAP
     UI --> ASTRO
     UI --> SEARCH
@@ -135,7 +135,7 @@ flowchart LR
 |搜尋|主線程執行（未用 Web Worker）|五年搜尋在背景分批執行，不卡住畫面|
 |儲存|localStorage（key：`smt-screen4-reference-v2`）|簡單，記住相機／被攝點／日期等設定|
 
-> 原則：\\\*\\\*簡單優先\\\*\\\*。不用 React / Node build，以本地 http server 開啟 `index.html` 即可。
+> 原則：**簡單優先**。不用 React / Node build，以本地 http server 開啟 `index.html` 即可。
 
 \---
 
@@ -199,8 +199,8 @@ $$\\theta = 2\\arctan\\left(\\frac{R\_{body}}{D}\\right)$$
 
 ## 8\. 對準判定與嗶聲
 
-1. 計算 A→B 視線的 `(Azi\\\_line, Alt\\\_line)`
-2. 計算當時日／月的 `(Azi\\\_body, Alt\\\_body)`
+1. 計算 A→B 視線的 `(Azi_line, Alt_line)`
+2. 計算當時日／月的 `(Azi_body, Alt_body)`
 3. 角距離：
 $$\\Delta = \\arccos\\big(\\sin a\_1 \\sin a\_2 + \\cos a\_1 \\cos a\_2 \\cos(z\_1 - z\_2)\\big)$$
 4. 當 $\\Delta$ 小於主頁「對準容差」（預設 **1°**，可調）→ **🔔 嗶聲**（Web Audio API 產生短音，不用音檔）
@@ -208,7 +208,7 @@ $$\\Delta = \\arccos\\big(\\sin a\_1 \\sin a\_2 + \\cos a\_1 \\cos a\_2 \\cos(z\
 
    * 日／月 Alt / Azi、角直徑、距離、月相 %
    * 與視線差 Δ（`ΔAzi / ΔAlt`）
-6. **全日路徑表**：所選日期每 5 分鐘（可調）一列，列出日／月 Azi、Alt，可匯出 **CSV**（`trail\\\_YYYY-MM-DD.csv`）
+6. **全日路徑表**：所選日期每 5 分鐘（可調）一列，列出日／月 Azi、Alt，可匯出 **CSV**（`trail_YYYY-MM-DD.csv`）
 
 \---
 
@@ -258,7 +258,7 @@ $$\\Delta = \\arccos\\big(\\sin a\_1 \\sin a\_2 + \\cos a\_1 \\cos a\_2 \\cos(z\
 
 ## 11\. 離線使用設計（規劃中）
 
-> ⚠️ 本節為\\\*\\\*規劃\\\*\\\*，目前尚未實作 Service Worker、Cache API 或 IndexedDB。首次使用需連網載入 CDN（Cesium、astronomy-engine、Leaflet）及地圖數據。
+> ⚠️ 本節為**規劃**，目前尚未實作 Service Worker、Cache API 或 IndexedDB。首次使用需連網載入 CDN（Cesium、astronomy-engine、Leaflet）及地圖數據。
 
 |項目|規劃方法|
 |-|-|
@@ -296,14 +296,14 @@ sun-moon-trail/
 ├── README.md               本文件
 ├── .gitignore
 ├── index.html              主頁（全部功能在單一檔案）
-├── config.js               個人設定：window.HK3D\\\_KEY（不上傳 git）
+├── config.js               個人設定：window.HK3D_KEY（不上傳 git）
 ├── start.bat               本機啟動：python -m http.server 8765
 ```
 
 `config.js` 範例（本機專用，勿提交）：
 
 ```js
-window.HK3D\\\_KEY = '你的 LandsD API key';
+window.HK3D_KEY = '你的 LandsD API key';
 ```
 
 \---
@@ -311,11 +311,11 @@ window.HK3D\\\_KEY = '你的 LandsD API key';
 ## 14\. 安裝與執行
 
 ```powershell
-# 1. 進入資料夾（例：E:\\\\AI\\\\codex\\\\sun-moon-trail）
-cd E:\\\\AI\\\\codex\\\\sun-moon-trail
+# 1. 進入資料夾（例：E:\AI\codex\sun-moon-trail）
+cd E:\AI\codex\sun-moon-trail
 
 # 2. 設定 config.js，填入自己的 LandsD key
-#    window.HK3D\\\_KEY = 'YOUR\\\_LANDSD\\\_API\\\_KEY';
+#    window.HK3D_KEY = 'YOUR_LANDSD_API_KEY';
 
 # 3. 啟動本機伺服器
 #    雙擊 start.bat，或：
@@ -325,7 +325,7 @@ python -m http.server 8765
 #    http://localhost:8765/index.html
 ```
 
-> 必須用 http（`http://localhost:8765`），\\\*\\\*不能用 `file://`\\\*\\\*—— Cesium Web Worker 及瀏覽器安全限制要求 HTTP。
+> 必須用 http（`http://localhost:8765`），**不能用 `file://`**—— Cesium Web Worker 及瀏覽器安全限制要求 HTTP。
 > 手機在同一 Wi-Fi 測試：`http://<電腦IP>:8765`。
 
 \---
@@ -351,7 +351,7 @@ python -m http.server 8765
 |**P7**|離線：Service Worker、區域下載|⚠️ 尚未實作|
 |**P8**|手機 App（PWA 安裝，或日後以 Capacitor 包裝）|⚠️ 尚未實作|
 
-## **驗證用例子**(2025-09-17 18:03)：
+## **驗證用例子(**(2025-09-17 18:03)：
 
 |被攝點\[朗庭園（Lang Ting Garden）太陽場景]|相機點\[拍攝點為元朗大馬路行人天橋]|已知時間 (例子 Azi ±0.2°, Alt ±0.2°)|
 |-|-|-|
@@ -404,7 +404,7 @@ App 的五年搜尋結果應包含上述日期時間。
 * **📍 手動地標（3D 示意樓宇）**（左面板）：當 LandsD 樓宇數據不準時（如朗庭園塔樓未正確建模），可手動新增示意樓宇。輸入方位角（從相機看過去）、距離（m）、高度（m）、寬度（m）、名稱 → 在兩個 3D 視角顯示半透明橘色盒子。地標儲存在本機（localStorage），可刪除。
 * 樓宇／道路橋樑：地政總署 3D Spatial Data API（`building`、`infrastructure` tileset）。山形：AWS Terrain Tiles（Terrarium DEM）。地面影像：地政總署 imagery（`mapapi.geodata.gov.hk`）。
 * API key 依地政總署測繪處 GIS Projects Section 條款使用，存放於本機 `config.js`（已列入 `.gitignore`，不會推上 GitHub）：
-`window.HK3D\\\_KEY = '你的 key';`
+`window.HK3D_KEY = '你的 key';`
 * 3D 需要以 http 開啟（Cesium Web Worker 不支援 file://）：雙擊 `start.bat`，瀏覽器開 http://localhost:8765 。未能載入 Cesium 時自動退回 2D 圖表。
 
 \---
@@ -416,7 +416,7 @@ sun-moon-trail/
 ├── README.md               本文件
 ├── .gitignore
 ├── index.html              主頁（全部功能在單一檔案）
-├── config.js               個人設定：window.HK3D\\\_KEY（不上傳 git）
+├── config.js               個人設定：window.HK3D_KEY（不上傳 git）
 ├── start.bat               本機啟動：python -m http.server 8765
 ```
 
@@ -428,7 +428,7 @@ sun-moon-trail/
 
 ```js
 // 僅本機使用，切勿提交個人 key。
-window.HK3D\\\_KEY = 'YOUR\\\_LANDSD\\\_API\\\_KEY';
+window.HK3D_KEY = 'YOUR_LANDSD_API_KEY';
 ```
 
 瀏覽器可見的 key 可被訪客下載。如 LandsD 支援限制，請把 key 限制在所需的服務及允許的來源（HTTP referrer）；切勿把個人 key 提交到公開倉庫。

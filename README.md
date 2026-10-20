@@ -2,9 +2,9 @@
 
 > 一個給攝影師用的\\\*\\\*香港境內日／月拍攝規劃工具\\\*\\\*，類似「巧攝 PlanIt Pro」，但專門用香港地政總署（LandsD）的 \\\*\\\*3D 地圖數據\\\*\\\*，準確計算太陽／月亮會在哪一天、哪一個時間，出現在山頭、建築物或標高柱後方。
 
-!\[map](https://github.com/inchinet/sun-moon-trail/blob/main/screen.png)
-!\[5year](https://github.com/inchinet/sun-moon-trail/blob/main/screen2.png)
-!\[eclipse](https://github.com/inchinet/sun-moon-trail/blob/main/screen2b.png)
+![map](https://github.com/inchinet/sun-moon-trail/blob/main/screen.png)
+![5year](https://github.com/inchinet/sun-moon-trail/blob/main/screen2.png)
+![eclipse](https://github.com/inchinet/sun-moon-trail/blob/main/screen2b.png)
 
 * **網頁版**（電腦／手機瀏覽器都能用），最後才考慮做手機 App。
 * **首次使用需要連網**（載入 Cesium、astronomy-engine CDN 及地圖數據）。
@@ -351,9 +351,9 @@ python -m http.server 8765
 |**P7**|離線：Service Worker、區域下載|⚠️ 尚未實作|
 |**P8**|手機 App（PWA 安裝，或日後以 Capacitor 包裝）|⚠️ 尚未實作|
 
-## **驗證用例子(**2025-09-17 18:03)：
+## **驗證用例子**(2025-09-17 18:03)：
 
-|被攝點\[朗庭園（Lang Ting Garden）太陽場景]|相機點\[拍攝點為元朗大馬路行人天橋]|已知時間 (**例子 Azi ±0.2°, Alt ±0.2°)**|
+|被攝點\[朗庭園（Lang Ting Garden）太陽場景]|相機點\[拍攝點為元朗大馬路行人天橋]|已知時間 (例子 Azi ±0.2°, Alt ±0.2°)|
 |-|-|-|
 |22.4446011, 114.0173931|22.4445094, 114.0322226|2026-03-28 18:04|
 |22.4446011, 114.0173931|22.4445094, 114.0322226|2026-09-15 17:54|

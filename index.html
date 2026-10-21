@@ -110,7 +110,8 @@
   </div>
   <div id="tab1" class="tabpane active">
   <div style="display:flex; gap:6px; margin-bottom:6px">
-    <input type="date" id="date">
+    <input type="text" id="date" size="11" placeholder="yyyy/mm/dd" title="日期（yyyy/mm/dd）">
+    <button id="datePick" type="button" title="用日曆揀日期（格內顯示仍是 yyyy/mm/dd）">📅</button><input type="date" id="dateCal" tabindex="-1" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
     <select id="body"><option value="Moon">🔵 月亮</option><option value="Sun">☀ 太陽</option></select>
   </div>
 
@@ -118,7 +119,9 @@
   <div class="row"><input id="camLat"><input id="camLon"><input id="camH"></div>
   <div class="row" style="margin-top:4px"><label title="隱藏所有 3D 樓宇圖層（身邊近樓遮擋時用；地形不受影響）。建議搭配手動地標使用"><input id="hideBld" type="checkbox"> 隱藏 3D 樓宇</label>
   <span title="只裁掉身邊 100 米內的扭曲近物/深色帶，遠樓保留"><button id="hideNear">隱藏近物</button><button id="showNear">顯示近物</button></span>
-  <label title="隱藏 DEM 地形層（深色斜帶若是地形數據扭曲，勾選即消失；3D 樓宇不受影響）"><input id="hideTerrain" type="checkbox"> 隱藏地形</label></div>
+  <label title="隱藏 DEM 地形層（深色斜帶若是地形數據扭曲，勾選即消失；3D 樓宇不受影響）"><input id="hideTerrain" type="checkbox"> 隱藏地形</label>
+  <label title="沿全日軌跡每 120 秒畫一個真實大小的日/月面，像串珠排在軌跡上（日月每 120 秒移動約一個直徑，所以珠與珠剛好不重疊）。日食/月食期間，串珠會按食分逐粒變形變色：日食=黑月影按真實位置咬住太陽；月食=半影變暗→偏食缺口→全食紅月。食甚嗰粒有白圈標記"><input id="beads" type="checkbox" checked> 日月串珠</label></div>
+  <div class="small" style="margin-top:2px">串珠顏色：🔵 正常 · 🌘 半影變暗 · ⚫ 本影缺口（日食＝月影） · 🔴 月全食 · ◎ 白圈＝食甚</div>
   <h2>🎯 被攝點（緯度, 經度, 高度 mPD）</h2>
   <div class="row"><input id="tgtLat"><input id="tgtLon"><input id="tgtH"></div>
   <div style="display:flex; gap:6px; margin:6px 0">
@@ -164,7 +167,7 @@
     </span>
   </div>
   <div class="view3d"><div class="cz" id="sky3d"></div><canvas id="skyCanvas" width="1120" height="560"></canvas><div id="skyInfo" class="scene-meta"></div></div>
-  <div class="small">3D 樓宇/道路：地政總署 3D Spatial Data；山形：Terrain Tiles。滾輪縮放、拖曳平移；選焦距 = 全片幅視角。🎯 十字 = 被攝點方向，日/月為真實角大小。</div>
+  <div class="small">3D 樓宇/道路：地政總署 3D Spatial Data；山形：Terrain Tiles。滾輪縮放、拖曳平移；選焦距 = 全片幅視角。🎯 十字 = 被攝點方向，日/月為真實角大小。串珠 = 沿軌跡每 120 秒的日/月面（左面板「日月串珠」開關），食期間逐粒按食分變形變色，食甚嗰粒有白圈。</div>
 </div>
 
 <div id="profile" class="glass">
@@ -194,16 +197,28 @@ const AU_KM = 149597870.7, R_SUN = 695700, R_MOON = 1737.4;
 
 // ---------- state ----------
 // Reproduction setup: pedestrian footbridge, looking west toward 朗庭園.
-// Requested screen4 reproduction scene: 2026-10-24 03:54 HKT, Moon.
-// These camera/target values reproduce the more-correct reference view.
-const def = { date:'2026-10-24', body:'Moon', cam:[22.4445094,114.0322226,60], tgt:[22.4446011,114.0173931,200], min:234, cal:[0,0], landmarks:[] };
-// Use a scene-specific key so an older saved scene cannot hide this default.
-const SETTINGS_KEY = 'smt-screen4-reference-v2';
-let S = Object.assign({}, def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
+// Default scene: the 0917-1803.jpg reference shot — 2025-09-17 18:03 HKT, Sun
+// (sun between the two 朗庭園 towers).  min 1083 = 18:03.
+const def = { date:'2025-09-17', body:'Sun', cam:[22.4445094,114.0322226,6], tgt:[22.4446011,114.0173931,200], min:1083, cal:[0,0], landmarks:[] };
+// Use a scene-specific key so an older saved scene cannot hide this default:
+// saved state overrides def, so editing def alone never changes what a
+// returning browser shows (that is why an old session kept showing 2030-06-01).
+// State saved under the previous key is migrated (camera/target/landmarks/
+// calibration carry over), but on first load with the new key the scene
+// date/body/time always start from def.
+const SETTINGS_KEY = 'smt-ref-20250917-v1';
+const PREV_KEY = 'smt-screen4-reference-v2';
+let S = Object.assign({}, def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(PREV_KEY) || '{}'));
+if (!localStorage.getItem(SETTINGS_KEY)){ S.date=def.date; S.body=def.body; S.min=def.min; }
 if (!Array.isArray(S.cal)) S.cal=[0,0];   // 3D scene calibration ΔAzi/ΔAlt (deg)
 function save(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(S)); }
 
 function hkDateStr(d){ return new Date(d.getTime() + HK).toISOString().slice(0,10); }
+function hkDateDisp(d){ return hkDateStr(d).replace(/-/g,'/'); }   // yyyy/mm/dd (display only; S.date stays ISO)
+const isoToDisp = iso => iso.replace(/-/g,'/');
+function dispToIso(v){ const m=String(v).trim().match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/); if (!m) return null;
+  const iso=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  return hkDateStr(new Date(iso+'T00:00:00+08:00'))===iso ? iso : null; }   // round-trip rejects e.g. 2025/02/30
 function hkTime(d, sec=true){ return new Date(d.getTime() + HK).toISOString().slice(11, sec?19:16); }
 function dayStart(){ return new Date(S.date + 'T00:00:00+08:00'); }
 function curTime(){ return new Date(dayStart().getTime() + S.min * 60e3); }
@@ -286,7 +301,7 @@ $('swap').onclick = () => { [S.cam, S.tgt] = [S.tgt, S.cam]; fillInputs(); fullU
 
 // ---------- inputs ----------
 const fields = { camLat:['cam',0], camLon:['cam',1], camH:['cam',2], tgtLat:['tgt',0], tgtLon:['tgt',1], tgtH:['tgt',2] };
-function fillInputs(){ for (const k in fields){ const [o,i]=fields[k]; $(k).value=S[o][i]; } $('date').value=S.date; $('body').value=S.body; $('slider').value=S.min; const tabIcon=$('yearTabIcon'); tabIcon.className=S.body==='Sun'?'sun':'moon-icon'; tabIcon.textContent=S.body==='Sun'?'☀':'🔵'; }
+function fillInputs(){ for (const k in fields){ const [o,i]=fields[k]; $(k).value=S[o][i]; } $('date').value=isoToDisp(S.date); $('body').value=S.body; $('slider').value=S.min; const tabIcon=$('yearTabIcon'); tabIcon.className=S.body==='Sun'?'sun':'moon-icon'; tabIcon.textContent=S.body==='Sun'?'☀':'🔵'; }
 for (const k in fields) $(k).onchange = () => {
   const v = $(k).value.trim();
   // allow pasting "lat, lon" into a lat field
@@ -294,7 +309,15 @@ for (const k in fields) $(k).onchange = () => {
   else { const [o,i]=fields[k]; S[o][i]=Number(v); }
   fillInputs(); fullUpdate();
 };
-$('date').onchange = () => { S.date=$('date').value; fullUpdate(); };
+$('date').onchange = () => { const iso=dispToIso($('date').value); if (iso){ S.date=iso; fullUpdate(); } else $('date').value=isoToDisp(S.date); };
+// calendar selection: the visible field stays yyyy/mm/dd text (a native date
+// input renders in the browser locale, e.g. 09/17/2025), so the 📅 button
+// opens a hidden native picker and copies its ISO value into S.date
+$('datePick').onclick = () => { const c=$('dateCal'); c.value=S.date;
+  if (c.showPicker){ try { c.showPicker(); return; } catch(e){} }
+  c.style.pointerEvents='auto'; c.style.opacity='1'; c.style.width='auto'; c.style.height='auto'; c.focus(); };
+$('dateCal').onchange = () => { const v=$('dateCal').value; if (v){ S.date=v; fullUpdate(); }
+  $('dateCal').style.opacity='0'; $('dateCal').style.pointerEvents='none'; $('dateCal').style.width='1px'; $('dateCal').style.height='1px'; };
 $('body').onchange = () => { S.body=$('body').value; fullUpdate(); };
 $('step').onchange = buildTrailTable;
 $('skyMode').onchange = drawSky;
@@ -333,6 +356,90 @@ function applyHideTerrain(){
   }
 }
 $('hideTerrain').onchange=()=>{ applyHideTerrain(); };
+// ---------- sun/moon bead string （串珠） along the daily trails ----------
+// One true-size disc every 120 s: the bodies move ~0.5° in 120 s ≈ one disc
+// diameter, so the beads just touch without overlapping.  During an eclipse
+// the beads take on the phase at their own minute: a solar bead gets the
+// dark Moon disc drawn over it at the Moon's true position; lunar beads are
+// shaded by Earth's shadow (penumbral dimming → partial bite → total = red).
+$('beads').onchange=()=>{ update(); };
+const beadsOn=()=>$('beads')?.checked!==false;
+let beadEcCache={key:'', solar:null, lunar:null};
+function dayEclipses(){
+  const key=S.date+'|'+S.cam.join(',');
+  if (beadEcCache.key===key) return beadEcCache;
+  const t0=dayStart().getTime(), obs=observer();
+  let solar=null, lunar=null;
+  try {
+    const e=A.SearchLocalSolarEclipse(new Date(t0-86400e3), obs);
+    const b=e.partial_begin.time.date.getTime(), en=e.partial_end.time.date.getTime();
+    if (b<t0+86400e3 && en>t0) solar={begin:b, end:en, peak:e.peak.time.date.getTime(), kind:e.kind};
+  } catch(err){}
+  try {
+    const m=A.SearchLunarEclipse(new Date(t0-86400e3));
+    const pk=m.peak.date.getTime();
+    if (pk-(m.sd_penum||0)*60000<t0+86400e3 && pk+(m.sd_penum||0)*60000>t0)
+      lunar={peak:pk, kind:m.kind, sdPenum:m.sd_penum||0, sdPartial:m.sd_partial||0, sdTotal:m.sd_total||0,
+             obsc:(m.kind==='total'?1:(m.obscuration||0))};
+  } catch(err){}
+  beadEcCache={key, solar, lunar};
+  return beadEcCache;
+}
+// lunar bead shading at time tms: mode none/pen/part/total; f = shadow coverage
+// 0..1 at that minute; side = +1 before peak (shadow on the leading edge), -1 after
+function lunarShade(tms, ec){
+  if (!ec || !ec.lunar) return {mode:'none'};
+  const L=ec.lunar, dt=Math.abs(tms-L.peak)/60000, side=tms<=L.peak?1:-1;
+  if (L.sdTotal>0 && dt<=L.sdTotal) return {mode:'total', side};
+  if (L.sdPartial>0 && dt<=L.sdPartial){
+    const f=L.obsc*Math.min(1,(L.sdPartial-dt)/Math.max(1,L.sdPartial-L.sdTotal));
+    return {mode:'part', f:Math.max(0.02,f), side};
+  }
+  if (L.sdPenum>0 && dt<=L.sdPenum) return {mode:'pen', f:1-dt/L.sdPenum, side};
+  return {mode:'none'};
+}
+// draw one bead at screen (x,y), true-size radius r; minute m indexes the
+// per-minute day.sun/day.moon arrays; proj maps (az,alt) -> [x,y] or null
+function drawBead(g, x, y, r, body, m, ec, proj, pxDeg, k){
+  const tms=dayStart().getTime()+m*60e3;
+  if (body==='Sun'){
+    g.fillStyle='rgba(255,176,46,.85)';
+    g.beginPath(); g.arc(x,y,r,0,7); g.fill();
+    g.strokeStyle='rgba(140,80,0,.45)'; g.lineWidth=Math.max(1,k); g.stroke();
+    if (ec.solar && tms>=ec.solar.begin && tms<=ec.solar.end){
+      const sp=day.sun[m], mp=day.moon[m];
+      if (angSep(sp.az,sp.alt,mp.az,mp.alt) < (sp.diam+mp.diam)/2){
+        const mq=proj(mp.az,mp.alt);
+        if (mq){ g.fillStyle='rgba(8,8,16,.94)';
+          g.beginPath(); g.arc(mq[0],mq[1],Math.max(2*k,mp.diam/2*pxDeg),0,7); g.fill(); }
+      }
+      if (Math.abs(tms-ec.solar.peak)<60000){ g.strokeStyle='#fff'; g.lineWidth=2*k;
+        g.beginPath(); g.arc(x,y,r+3*k,0,7); g.stroke(); }
+    }
+    return;
+  }
+  const sh=lunarShade(tms, ec);
+  g.fillStyle = sh.mode==='total' ? '#b3502e' : 'rgba(140,190,255,.92)';
+  g.beginPath(); g.arc(x,y,r,0,7); g.fill();
+  g.strokeStyle = sh.mode==='total' ? 'rgba(70,20,5,.6)' : 'rgba(20,60,120,.45)';
+  g.lineWidth=Math.max(1,k); g.stroke();
+  if (sh.mode==='pen'){
+    g.fillStyle=`rgba(52,44,40,${(0.34*sh.f).toFixed(3)})`;
+    g.beginPath(); g.arc(x,y,r,0,7); g.fill();
+  } else if (sh.mode==='part'){
+    // schematic Earth-shadow bite: a same-size dark disc sliding in from the
+    // leading edge (direction of travel along the trail), coverage = f
+    const a=day.moon[Math.max(0,m-2)], b=day.moon[Math.min(1440,m+2)];
+    const qa=proj(a.az,a.alt), qb=proj(b.az,b.alt);
+    let ux=sh.side, uy=0;
+    if (qa && qb){ const dx=qb[0]-qa[0], dy=qb[1]-qa[1], len=Math.hypot(dx,dy)||1; ux=dx/len*sh.side; uy=dy/len*sh.side; }
+    const off=(1-sh.f)*2*r;
+    g.fillStyle='rgba(10,10,18,.9)';
+    g.beginPath(); g.arc(x+ux*off, y+uy*off, r, 0, 7); g.fill();
+  }
+  if (ec.lunar && Math.abs(tms-ec.lunar.peak)<60000){ g.strokeStyle='#fff'; g.lineWidth=2*k;
+    g.beginPath(); g.arc(x,y,r+3*k,0,7); g.stroke(); }
+}
 // near-plane clip: hide distorted nearby geometry (dark band) while keeping distant buildings
 let nearClipM=0.1;
 $('hideNear').onclick=()=>{ nearClipM=100; drawSky(); drawProfile(); };
@@ -538,6 +645,18 @@ function drawSky(){
     g.stroke();
     if (!full){ // minute ticks
       g.fillStyle=col; arr.forEach(p => { g.beginPath(); g.arc(X(p.az),Y(p.alt),2,0,7); g.fill(); });
+    }
+  }
+  // bead string (same as the 3D overlay; skipped in full-sky mode)
+  if (!full && beadsOn()){
+    const ec=dayEclipses(), proj=(az,alt)=>[X(az),Y(alt)], bk=Math.max(1,W/1120);
+    for (const b of ['Moon','Sun']){
+      const arr=b==='Sun'?day.sun:day.moon;
+      for (let m=0; m<=1440; m+=2){
+        const p=arr[m], x=X(p.az), y=Y(p.alt), r=Math.max(2, p.diam/2*pxDeg);
+        if (x<-r||x>W+r||y<-r||y>H+r) continue;
+        drawBead(g, x, y, r, b, m, ec, proj, pxDeg, bk);
+      }
     }
   }
   // current bodies (true size in zoom mode)
@@ -815,6 +934,20 @@ function drawOverlay(g, W, H, P, cAz, cAlt, fov, k=W/1120){
       if (pxDeg*.25>6*k){ g.beginPath(); g.arc(q[0],q[1],2*k,0,7); g.fill(); }
       if (m%60===0){ g.beginPath(); g.arc(q[0],q[1],4*k,0,7); g.fill(); g.fillText(hkTime(new Date(t0+m*60e3),false), q[0]+6*k, q[1]-6*k); } });
   }
+  // bead string: one true-size face every 120 s along each trail (Moon first,
+  // so a solar eclipse's dark Moon overlay lands on top of the Sun beads)
+  if (beadsOn()){
+    const ec=dayEclipses();
+    for (const b of ['Moon','Sun']){
+      const arr=b==='Sun'?day.sun:day.moon;
+      for (let m=0; m<=1440; m+=2){
+        const p=arr[m], q=P(p.az,p.alt); if (!q) continue;
+        const r=Math.max(2.5*k, p.diam/2*pxDeg);
+        if (q[0]<-r||q[0]>W+r||q[1]<-r||q[1]>H+r) continue;
+        drawBead(g, q[0], q[1], r, b, m, ec, P, pxDeg, k);
+      }
+    }
+  }
   for (const b of ['Sun','Moon']){
     const p=bodyPos(b,t,obs), q=P(p.az,p.alt); if (!q) continue;
     const r=Math.max(4*k, p.diam/2*pxDeg);
@@ -924,12 +1057,12 @@ function runYearSearch(){
       }
       t+=STEP; s0=s1; s1=s2;
     }
-    $('yStatus').textContent=`搜尋中… ${hkDateStr(new Date(t))} · 已找到 ${hits.length}`;
+    $('yStatus').textContent=`搜尋中… ${hkDateDisp(new Date(t))} · 已找到 ${hits.length}`;
     if (t<end) { setTimeout(chunk, 0); return; }
     $('yStatus').innerHTML=`${body==='Sun'?'☀':'🔵'} 視線 Azi ${line.az.toFixed(2)}° Alt ${line.alt.toFixed(2)}° · Azi ±${aziTol}°、Alt ±${altTol}° · 共 ${hits.length} 次（按列跳至該時間）`;
     const MAX=150, shown=hits.slice(0,MAX), tol=+$('tol').value, sg=v => (v>=0?'+':'')+v.toFixed(2);
     $('yearTbl').innerHTML = head + (hits.length ? shown.map(h => { const okA=Math.abs(h.da)<=tol, okZ=Math.abs(h.dz)<=tol, y=okA&&okZ?' style="color:#ffe14d;font-weight:700"':(okA||okZ)?' style="color:#d9b3ff;font-weight:700"':'';
-      return `<tr class="hit" data-t="${h.t}"><td${y}>${hkDateStr(new Date(h.t))}</td><td${y}>${hkTime(new Date(h.t),false)}</td><td${y}>${h.p.az.toFixed(2)}</td><td${y}>${h.p.alt.toFixed(2)}</td><td class="${okZ?'ok':''}">${sg(h.dz)}</td><td class="${okA?'ok':''}">${sg(h.da)}</td></tr>`; }).join('')
+      return `<tr class="hit" data-t="${h.t}"><td${y}>${hkDateDisp(new Date(h.t))}</td><td${y}>${hkTime(new Date(h.t),false)}</td><td${y}>${h.p.az.toFixed(2)}</td><td${y}>${h.p.alt.toFixed(2)}</td><td class="${okZ?'ok':''}">${sg(h.dz)}</td><td class="${okA?'ok':''}">${sg(h.da)}</td></tr>`; }).join('')
       + (hits.length>MAX ? `<tr><td colspan="6" style="text-align:center">… 另有 ${hits.length-MAX} 項</td></tr>` : '')
       : `<tr><td colspan="6" style="text-align:center">（沒有符合項目）</td></tr>`);
     $('yearTbl').querySelectorAll('tr.hit').forEach(r => r.onclick = () => {
@@ -996,7 +1129,7 @@ function runEclipseSearch(){
   const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th></tr>`;
   $('eStatus').textContent=`未來五年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻）`;
   $('eclipseTbl').innerHTML = head + (rows.length ? rows.map(r =>
-    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateStr(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
+    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
   ).join('') : `<tr><td colspan="9" style="text-align:center">（五年內無可見日／月食）</td></tr>`);
   $('eclipseTbl').querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
     const tt=+tr.dataset.t;

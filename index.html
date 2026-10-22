@@ -24,7 +24,7 @@
   #map { position:absolute; inset:0; }
   .glass { position:absolute; z-index:1000; background:var(--glass); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%);
            border:1px solid var(--edge); border-radius:18px; box-shadow: 0 8px 32px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); padding:12px 14px; }
-  #panel { top:12px; left:12px; width:340px; height:calc(100vh - 24px); box-sizing:border-box; overflow:auto; font-size:13px; display:flex; flex-direction:column; }
+  #panel { top:12px; left:12px; width:400px; height:calc(100vh - 24px); box-sizing:border-box; overflow:auto; font-size:13px; display:flex; flex-direction:column; }
   #panel > * { flex-shrink:0; }
   .tabs { display:flex; gap:4px; margin-bottom:6px; }
   .tabs button { flex:1; } .tabs button.active { background:rgba(255,255,255,.28); font-weight:600; }
@@ -34,12 +34,12 @@
   #tab1 > #trailWrap { flex:1 1 0; min-height:240px; overflow:auto; }
   #tab2 > #yearWrap { flex:1 1 0; min-height:240px; overflow:auto; }
   #tab3 > #eclipseWrap { flex:1 1 0; min-height:240px; overflow:auto; }
-  #sky   { top:12px; right:12px; width:min(560px, calc(100vw - 380px)); min-width:320px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
+  #sky   { top:12px; right:12px; width:min(560px, calc(100vw - 436px)); min-width:320px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
   #skyCanvas { cursor:grab; touch-action:none; }
   #skyCanvas.is-panning { cursor:grabbing; }
   #zoom { display:none; }
-  #profile { right:12px; bottom:86px; width:min(620px, calc(100vw - 390px)); min-width:360px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
-  #bottom{ left:364px; bottom:12px; width:min(430px, calc(100vw - 24px)); min-width:280px; min-height:48px; display:flex; gap:10px; align-items:center; resize:both; overflow:hidden; }
+  #profile { right:12px; bottom:86px; width:min(620px, calc(100vw - 446px)); min-width:360px; min-height:220px; resize:both; overflow:hidden; display:flex; flex-direction:column; }
+  #bottom{ left:424px; bottom:12px; width:min(430px, calc(100vw - 24px)); min-width:280px; min-height:48px; display:flex; gap:10px; align-items:center; resize:both; overflow:hidden; }
   #panel, #sky, #profile { resize:none; }
   .resize-edge { position:absolute; z-index:1100; }
   .resize-edge.n, .resize-edge.s { left:12px; right:12px; height:10px; }
@@ -79,6 +79,11 @@
   table { width:100%; border-collapse:collapse; font-variant-numeric: tabular-nums; font-size:12px; }
   td, th { padding:2px 4px; text-align:right; border-bottom:1px solid rgba(255,255,255,.08);} th { position:sticky; top:0; background:rgba(20,28,45,.9);}
   tr.hit td { cursor:pointer; } tr.hit:hover td { background:rgba(255,255,255,.12); }
+  tr.sel td { background:rgba(255,176,46,.38) !important; } tr.sel td:first-child { box-shadow: inset 3px 0 0 #ffb02e; }
+  /* one event per row: never wrap a cell in the two search tables */
+  #eclipseTbl td, #eclipseTbl th, #yearTbl td, #yearTbl th { white-space:nowrap; }
+  #eclipseTbl, #yearTbl { font-size:11.5px; }
+  #eclipseTbl td, #eclipseTbl th, #yearTbl td, #yearTbl th { padding:2px 3px; }
   .small { font-size:11px; opacity:.7; }
   @media (max-width:900px){ #panel{width:310px} #sky{width:calc(100vw - 334px)} #profile{left:326px;right:12px;width:auto;min-width:300px} #bottom{left:326px} }
   @media (max-width:650px){ #panel{width:calc(100vw - 24px);max-height:48vh} #sky,#profile{left:12px;right:12px;width:auto;min-width:0} #sky{top:calc(48vh + 20px);max-height:30vh} #profile{top:calc(78vh + 24px);bottom:auto;max-height:30vh} #bottom{left:12px} }
@@ -200,18 +205,13 @@ const AU_KM = 149597870.7, R_SUN = 695700, R_MOON = 1737.4;
 // Default scene: the 0917-1803.jpg reference shot — 2025-09-17 18:03 HKT, Sun
 // (sun between the two 朗庭園 towers).  min 1083 = 18:03.
 const def = { date:'2025-09-17', body:'Sun', cam:[22.4445094,114.0322226,6], tgt:[22.4446011,114.0173931,200], min:1083, cal:[0,0], landmarks:[] };
-// Use a scene-specific key so an older saved scene cannot hide this default:
-// saved state overrides def, so editing def alone never changes what a
-// returning browser shows (that is why an old session kept showing 2030-06-01).
-// State saved under the previous key is migrated (camera/target/landmarks/
-// calibration carry over), but on first load with the new key the scene
-// date/body/time always start from def.
-const SETTINGS_KEY = 'smt-ref-20250917-v1';
-const PREV_KEY = 'smt-screen4-reference-v2';
-let S = Object.assign({}, def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(PREV_KEY) || '{}'));
-if (!localStorage.getItem(SETTINGS_KEY)){ S.date=def.date; S.body=def.body; S.min=def.min; }
+// Every load starts from def — saved state is NOT restored. (Saved state used
+// to override def, so an old session kept showing e.g. 2030-06-01 no matter
+// what def said.) Settings and landmarks live only for the current page
+// session; reload / Ctrl+F5 always returns to the def scene above.
+let S = JSON.parse(JSON.stringify(def));
 if (!Array.isArray(S.cal)) S.cal=[0,0];   // 3D scene calibration ΔAzi/ΔAlt (deg)
-function save(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(S)); }
+function save(){}   // persistence removed on purpose — see note above
 
 function hkDateStr(d){ return new Date(d.getTime() + HK).toISOString().slice(0,10); }
 function hkDateDisp(d){ return hkDateStr(d).replace(/-/g,'/'); }   // yyyy/mm/dd (display only; S.date stays ISO)
@@ -325,11 +325,12 @@ const skyView = { zoom:2*deg(Math.atan(18/300)) };
 $('focal').onchange = () => { const f=+$('focal').value; if (f){ skyView.zoom = 2*deg(Math.atan(18/f)); profView.fov=skyView.zoom; skyPan.az=0; skyPan.alt=0; drawSky(); drawProfile(); } };
 // center the VR view on the selected Sun/Moon (useful for framing the shot)
 function centerOnBody(){
-  if ($('skyMode').value === 'full') return;
   const line=sightLine(), p=bodyPos(S.body,curTime(),observer());
   let dAz=p.az-line.az; dAz=((dAz+540)%360)-180;   // wrap to [-180,180]
-  skyPan.az=dAz; skyPan.alt=p.alt-line.alt;
-  drawSky(); refreshPanMeta();
+  const dAlt=p.alt-line.alt;
+  if ($('skyMode').value !== 'full'){ skyPan.az=dAz; skyPan.alt=dAlt; }
+  profView.az=dAz; profView.alt=dAlt;   // wide panel centers on the body too
+  drawSky(); drawProfile(); refreshPanMeta();
 }
 $('centerBody').onclick = centerOnBody;
 // hide/show all 3D building tilesets (reliable toggle when nearby blocks occlude the view)
@@ -575,7 +576,8 @@ function buildTrailTable(){
     h+=`<tr class="hit" data-m="${m}"><td>${hkTime(new Date(t0+m*60e3),false)}</td><td>${s.az.toFixed(2)}</td><td>${s.alt.toFixed(2)}</td><td>${mo.az.toFixed(2)}</td><td>${mo.alt.toFixed(2)}</td></tr>`;
   }
   $('trail').innerHTML=h;
-  $('trail').querySelectorAll('tr.hit').forEach(r => r.onclick = () => { S.min=+r.dataset.m; fillInputs(); update(); });
+  $('trail').querySelectorAll('tr.hit').forEach(r => r.onclick = () => { S.min=+r.dataset.m; selRow.trail=S.min; markSel('trail', selRow.trail, 'm'); fillInputs(); update(); });
+  markSel('trail', selRow.trail, 'm');
 }
 $('csv').onclick = () => {
   const step=+$('step').value, t0=dayStart().getTime();
@@ -1018,6 +1020,13 @@ function fullUpdate(){
 }
 
 // ---------- tab 2: 5-year same-angle search ----------
+// selected-row highlight: remember the clicked row of each left-panel list so
+// it stays highlighted after the jump, and re-mark it when a list is rebuilt
+const selRow = { year:null, eclipse:null, trail:null };
+function markSel(tblId, val, attr='t'){
+  const tbl=$(tblId); if (!tbl) return;
+  tbl.querySelectorAll('tr').forEach(r => r.classList.toggle('sel', val!=null && +r.dataset[attr]===val));
+}
 let yJob=0, yDirty=true, yTimer=null;
 let eJob=0, eDirty=true;
 function showTab(n){
@@ -1066,9 +1075,12 @@ function runYearSearch(){
       + (hits.length>MAX ? `<tr><td colspan="6" style="text-align:center">… 另有 ${hits.length-MAX} 項</td></tr>` : '')
       : `<tr><td colspan="6" style="text-align:center">（沒有符合項目）</td></tr>`);
     $('yearTbl').querySelectorAll('tr.hit').forEach(r => r.onclick = () => {
-      const tt=+r.dataset.t; S.date=hkDateStr(new Date(tt)); S.min=Math.round((tt-dayStart().getTime())/60e3);
+      const tt=+r.dataset.t; selRow.year=tt; markSel('yearTbl', tt);
+      S.date=hkDateStr(new Date(tt)); S.min=Math.round((tt-dayStart().getTime())/60e3);
       fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
+      centerOnBody();   // auto-aim both right panels at the body
     });
+    markSel('yearTbl', selRow.year);
   }
   chunk();
 }
@@ -1132,7 +1144,7 @@ function runEclipseSearch(){
     `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
   ).join('') : `<tr><td colspan="9" style="text-align:center">（五年內無可見日／月食）</td></tr>`);
   $('eclipseTbl').querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
-    const tt=+tr.dataset.t;
+    const tt=+tr.dataset.t; selRow.eclipse=tt; markSel('eclipseTbl', tt);
     S.body=tr.dataset.body; S.date=hkDateStr(new Date(tt));
     // set time to peak (minutes from day start)
     const ds=dayStart().getTime();
@@ -1140,6 +1152,7 @@ function runEclipseSearch(){
     fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
     centerOnBody();   // auto-aim VR at the eclipsed sun/moon
   });
+  markSel('eclipseTbl', selRow.eclipse);
 }
 
 init3D(); fillInputs(); fullUpdate(); drawProfile();

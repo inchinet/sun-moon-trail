@@ -94,19 +94,19 @@
 
 <div id="panel" class="glass">
   <h1><span class="sun-icon">☀</span><span class="moon-icon">🔵</span> 日月路線 HK</h1>
-  <div class="tabs"><button id="tabBtn1" class="active">主頁</button><button id="tabBtn2"><span id="yearTabIcon" class="moon-icon">🔵</span> 五年相同角度</button><button id="tabBtn3">🌒 日食／月食</button></div>
+  <div class="tabs"><button id="tabBtn1" class="active">主頁</button><button id="tabBtn2"><span id="yearTabIcon" class="moon-icon">🔵</span> 十年相同角度</button><button id="tabBtn3">🌒 日食／月食</button></div>
   <div id="tab2" class="tabpane">
-    <div class="small">由所選日期起五年內，所選天體（<span class="sun-icon">☀</span>/<span class="moon-icon">🔵</span>）每次最接近 📷→🎯 視線的時刻，且 ΔAzi、ΔAlt 分別在下方「Azi 容差」「Alt 容差」內。ΔAzi/ΔAlt 綠色 = ≤ 主頁「對準容差」；兩者皆綠時該列黃色（日/月正落在被攝點上），只有一項綠時該列淺紫色。相機/被攝點/天體/日期/容差改變時自動重新搜尋。</div>
+    <div class="small">由所選日期起十年內，所選天體（<span class="sun-icon">☀</span>/<span class="moon-icon">🔵</span>）每次最接近 📷→🎯 視線的時刻，且 ΔAzi、ΔAlt 分別在下方「Azi 容差」「Alt 容差」內。ΔAzi/ΔAlt 綠色 = ≤ 主頁「對準容差」；兩者皆綠時該列黃色（日/月正落在被攝點上），只有一項綠時該列淺紫色。相機/被攝點/天體/日期/容差改變時自動重新搜尋。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
-      <span>Azi ±</span><input id="yAziTol" type="number" step="0.5" min="0.5" value="1" style="width:60px"><span>°</span>
-      <span>Alt ±</span><input id="yAltTol" type="number" step="0.5" value="1" style="width:60px"><span>°</span>
+      <span>Azi ±</span><input id="yAziTol" type="number" step="0.1" min="0.1" value="0.2" style="width:60px"><span>°</span>
+      <span>Alt ±</span><input id="yAltTol" type="number" step="0.1" min="0.1" value="0.2" style="width:60px"><span>°</span>
       <button id="yCsv">匯出 CSV</button><button id="yRun" style="margin-left:auto">重新搜尋</button>
     </div>
     <div id="yStatus" class="small">—</div>
     <div id="yearWrap"><table id="yearTbl"></table></div>
   </div>
   <div id="tab3" class="tabpane">
-    <div class="small">由所選日期起五年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻。</div>
+    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
       <button id="eCsv">匯出 CSV</button><button id="eRun" style="margin-left:auto">重新搜尋</button>
     </div>
@@ -1037,7 +1037,7 @@ function fullUpdate(){
   scheduleYearSearch(); scheduleEclipseSearch();
 }
 
-// ---------- tab 2: 5-year same-angle search ----------
+// ---------- tab 2: 10-year same-angle search ----------
 // selected-row highlight: remember the clicked row of each left-panel list so
 // it stays highlighted after the jump, and re-mark it when a list is rebuilt
 const selRow = { year:null, eclipse:null, trail:null };
@@ -1064,7 +1064,7 @@ function scheduleYearSearch(){
 function runYearSearch(){
   yDirty=false; const job=++yJob;
   const line=sightLine(), obs=observer(), body=S.body, altTol=+$('yAltTol').value, aziTol=+$('yAziTol').value;
-  const t0=dayStart().getTime(), tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+5);
+  const t0=dayStart().getTime(), tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+10);
   const end=tEnd.getTime(), STEP=20*60e3, hits=[];
   const sepT = t => { const p=bodyPos(body,new Date(t),obs); return angSep(p.az,p.alt,line.az,line.alt); };
   const bodyIcon = body==='Sun' ? '<span class="sun-icon">☀</span>' : '<span class="moon-icon">🔵</span>';
@@ -1108,13 +1108,13 @@ function scheduleEclipseSearch(){
   eDirty=true; eJob++;
   const st=$('eStatus'); if (st) st.textContent='位置已改變，等待重新搜尋…';
 }
-// ---------- tab 3: eclipse search (5 years) ----------
+// ---------- tab 3: eclipse search (10 years) ----------
 let eclipseRows=[];
 function runEclipseSearch(){
   eDirty=false; const job=++eJob;
   const obs=observer();
   const t0=dayStart().getTime();
-  const tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+5);
+  const tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+10);
   const end=tEnd.getTime();
   const rows=[];
   const kindZh={partial:'偏食', annular:'環食', total:'全食', penumbral:'半影月食'};
@@ -1122,7 +1122,7 @@ function runEclipseSearch(){
   // Solar eclipses visible at camera location
   try {
     let d=new Date(t0), n=0;
-    while (n<40){
+    while (n<100){
       if (job!==eJob) return;
       const e=A.SearchLocalSolarEclipse(d, obs);
       const pt=e.peak.time.date.getTime();
@@ -1139,7 +1139,7 @@ function runEclipseSearch(){
   // Lunar eclipses with moon above horizon at peak
   try {
     let d=new Date(t0), n=0;
-    while (n<40){
+    while (n<100){
       if (job!==eJob) return;
       const m=A.SearchLunarEclipse(d);
       const pt=m.peak.date.getTime();
@@ -1157,10 +1157,10 @@ function runEclipseSearch(){
   rows.sort((a,b)=>a.t-b.t);
   eclipseRows=rows;   // for overlay eclipse rendering
   const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th></tr>`;
-  $('eStatus').textContent=`未來五年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻）`;
+  $('eStatus').textContent=`未來十年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻）`;
   $('eclipseTbl').innerHTML = head + (rows.length ? rows.map(r =>
     `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
-  ).join('') : `<tr><td colspan="9" style="text-align:center">（五年內無可見日／月食）</td></tr>`);
+  ).join('') : `<tr><td colspan="9" style="text-align:center">（十年內無可見日／月食）</td></tr>`);
   $('eclipseTbl').querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
     const tt=+tr.dataset.t; selRow.eclipse=tt; markSel('eclipseTbl', tt);
     S.body=tr.dataset.body; S.date=hkDateStr(new Date(tt));

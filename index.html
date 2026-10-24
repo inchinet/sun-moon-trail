@@ -96,7 +96,7 @@
   <h1><span class="sun-icon">☀</span><span class="moon-icon">🔵</span> 日月路線 HK</h1>
   <div class="tabs"><button id="tabBtn1" class="active">主頁</button><button id="tabBtn2"><span id="yearTabIcon" class="moon-icon">🔵</span> 十年相同角度</button><button id="tabBtn3">🌒 日食／月食</button></div>
   <div id="tab2" class="tabpane">
-    <div class="small">由所選日期起十年內，所選天體（<span class="sun-icon">☀</span>/<span class="moon-icon">🔵</span>）每次最接近 📷→🎯 視線的時刻，且 ΔAzi、ΔAlt 分別在下方「Azi 容差」「Alt 容差」內。ΔAzi/ΔAlt 綠色 = ≤ 主頁「對準容差」；兩者皆綠時該列黃色（日/月正落在被攝點上），只有一項綠時該列淺紫色。相機/被攝點/天體/日期/容差改變時自動重新搜尋。</div>
+    <div class="small">以主頁所選日期時間的日/月位置為基準（例如一張實拍相片的拍攝時刻），搜尋由所選日期起十年內，日/月回到同一位置（ΔAzi、ΔAlt 在下方「Azi 容差」「Alt 容差」內）的日子——與視線／被攝點無關。ΔAzi/ΔAlt 綠色 = ≤ 主頁「對準容差」；兩者皆綠時該列黃色（日/月正落在基準位置上），只有一項綠時該列淺紫色。日期/時間/天體/容差改變時自動重新搜尋。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
       <span>Azi ±</span><input id="yAziTol" type="number" step="0.1" min="0.1" value="0.2" style="width:60px"><span>°</span>
       <span>Alt ±</span><input id="yAltTol" type="number" step="0.1" min="0.1" value="0.2" style="width:60px"><span>°</span>
@@ -508,9 +508,9 @@ skyCanvas.addEventListener('pointermove', e => {
 const stopSkyPan = () => { skyPan.active = false; skyCanvas.classList.remove('is-panning'); };
 skyCanvas.addEventListener('pointerup', stopSkyPan);
 skyCanvas.addEventListener('pointercancel', stopSkyPan);
-$('slider').oninput = () => { S.min=+$('slider').value; update(); };
-$('minus').onclick = () => { S.min=Math.max(0,S.min-1); fillInputs(); update(); };
-$('plus').onclick  = () => { S.min=Math.min(1439,S.min+1); fillInputs(); update(); };
+$('slider').oninput = () => { S.min=+$('slider').value; scheduleYearSearch(); update(); };
+$('minus').onclick = () => { S.min=Math.max(0,S.min-1); fillInputs(); scheduleYearSearch(); update(); };
+$('plus').onclick  = () => { S.min=Math.min(1439,S.min+1); fillInputs(); scheduleYearSearch(); update(); };
 // Left/Right arrow keys = −1m / +1m (Shift = 10m)
 document.addEventListener('keydown', e => {
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -519,10 +519,10 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowLeft' ? -1 : 1);
   S.min = Math.min(1439, Math.max(0, S.min + step));
-  $('slider').value = S.min; fillInputs(); update();
+  $('slider').value = S.min; fillInputs(); scheduleYearSearch(); update();
 });
 let playT=null, playDir=0;
-function stopPlay(){ clearInterval(playT); playT=null; playDir=0; $('play').textContent='▶'; $('rev').textContent='◀'; }
+function stopPlay(){ if (playT) scheduleYearSearch(); clearInterval(playT); playT=null; playDir=0; $('play').textContent='▶'; $('rev').textContent='◀'; }
 function startPlay(dir){
   const was = playDir; stopPlay();
   if (was === dir) return;            // same button again = pause
@@ -576,7 +576,7 @@ function buildTrailTable(){
     h+=`<tr class="hit" data-m="${m}"><td>${hkTime(new Date(t0+m*60e3),false)}</td><td>${s.az.toFixed(2)}</td><td>${s.alt.toFixed(2)}</td><td>${mo.az.toFixed(2)}</td><td>${mo.alt.toFixed(2)}</td></tr>`;
   }
   $('trail').innerHTML=h;
-  $('trail').querySelectorAll('tr.hit').forEach(r => r.onclick = () => { S.min=+r.dataset.m; selRow.trail=S.min; markSel('trail', selRow.trail, 'm'); fillInputs(); update(); });
+  $('trail').querySelectorAll('tr.hit').forEach(r => r.onclick = () => { S.min=+r.dataset.m; selRow.trail=S.min; markSel('trail', selRow.trail, 'm'); fillInputs(); scheduleYearSearch(); update(); });
   markSel('trail', selRow.trail, 'm');
 }
 $('csv').onclick = () => {
@@ -622,7 +622,7 @@ $('findDay').onclick = () => {
   $('dayHits').innerHTML = hits.length ? hits.map(h =>
     `<div class="hit" style="cursor:pointer" data-t="${h.t}"><span class="${h.d<=tol?'ok':''}">${hkTime(new Date(h.t))}</span> Δ ${h.d.toFixed(3)}° · Azi ${h.p.az.toFixed(3)}° Alt ${h.p.alt.toFixed(3)}°</div>`).join('')
     : '本日最接近距離 > 3°，沒有對準。';
-  $('dayHits').querySelectorAll('[data-t]').forEach(e => e.onclick = () => { S.min=Math.round((+e.dataset.t - t0)/60e3); fillInputs(); update(); });
+  $('dayHits').querySelectorAll('[data-t]').forEach(e => e.onclick = () => { S.min=Math.round((+e.dataset.t - t0)/60e3); fillInputs(); scheduleYearSearch(); update(); });
 };
 
 // ---------- sky chart ----------
@@ -1063,10 +1063,14 @@ function scheduleYearSearch(){
 }
 function runYearSearch(){
   yDirty=false; const job=++yJob;
-  const line=sightLine(), obs=observer(), body=S.body, altTol=+$('yAltTol').value, aziTol=+$('yAziTol').value;
+  const obs=observer(), body=S.body, altTol=+$('yAltTol').value, aziTol=+$('yAziTol').value;
+  // reference = the body's own position at the selected date/time (e.g. the
+  // moment of a real photo) — find when the body returns to that same
+  // Azi/Alt; the sight line / target point plays no part in this search
+  const refT=curTime(), ref=bodyPos(body, refT, obs);
   const t0=dayStart().getTime(), tEnd=new Date(S.date+'T00:00:00+08:00'); tEnd.setFullYear(tEnd.getFullYear()+10);
   const end=tEnd.getTime(), STEP=20*60e3, hits=[];
-  const sepT = t => { const p=bodyPos(body,new Date(t),obs); return angSep(p.az,p.alt,line.az,line.alt); };
+  const sepT = t => { const p=bodyPos(body,new Date(t),obs); return angSep(p.az,p.alt,ref.az,ref.alt); };
   const bodyIcon = body==='Sun' ? '<span class="sun-icon">☀</span>' : '<span class="moon-icon">🔵</span>';
   const head=`<tr><th>日期</th><th>時間</th><th class="moon">${bodyIcon}Azi</th><th class="moon">${bodyIcon}Alt</th><th>ΔAzi</th><th>ΔAlt</th></tr>`;
   $('yearTbl').innerHTML=head;
@@ -1079,14 +1083,14 @@ function runYearSearch(){
       if (s1<=s0 && s1<=s2 && s1<=aziTol+altTol+2){   // closest approach of this pass
         let a=t-STEP, b=t+STEP; const g=(Math.sqrt(5)-1)/2;
         while (b-a>1000){ const c=b-g*(b-a), d=a+g*(b-a); if (sepT(c)<sepT(d)) b=d; else a=c; }
-        const tm=(a+b)/2, p=bodyPos(body,new Date(tm),obs), da=p.alt-line.alt, dz=((p.az-line.az+540)%360)-180;
-        if (Math.abs(da)<=altTol && Math.abs(dz)<=aziTol && p.alt>-1 && tm>=t0) hits.push({t:tm, p, da, dz});
+        const tm=(a+b)/2, p=bodyPos(body,new Date(tm),obs), da=p.alt-ref.alt, dz=((p.az-ref.az+540)%360)-180;
+        if (Math.abs(da)<=altTol && Math.abs(dz)<=aziTol && tm>=t0) hits.push({t:tm, p, da, dz});
       }
       t+=STEP; s0=s1; s1=s2;
     }
     $('yStatus').textContent=`搜尋中… ${hkDateDisp(new Date(t))} · 已找到 ${hits.length}`;
     if (t<end) { setTimeout(chunk, 0); return; }
-    $('yStatus').innerHTML=`${body==='Sun'?'☀':'🔵'} 視線 Azi ${line.az.toFixed(2)}° Alt ${line.alt.toFixed(2)}° · Azi ±${aziTol}°、Alt ±${altTol}° · 共 ${hits.length} 次（按列跳至該時間）`;
+    $('yStatus').innerHTML=`${body==='Sun'?'☀':'🔵'} 基準 ${hkDateDisp(refT)} ${hkTime(refT,false)} 位置 Azi ${ref.az.toFixed(2)}° Alt ${ref.alt.toFixed(2)}° · Azi ±${aziTol}°、Alt ±${altTol}° · 共 ${hits.length} 次（按列跳至該時間）`;
     const MAX=150, shown=hits.slice(0,MAX), tol=+$('tol').value, sg=v => (v>=0?'+':'')+v.toFixed(2);
     $('yearTbl').innerHTML = head + (hits.length ? shown.map(h => { const okA=Math.abs(h.da)<=tol, okZ=Math.abs(h.dz)<=tol, y=okA&&okZ?' style="color:#ffe14d;font-weight:700"':(okA||okZ)?' style="color:#d9b3ff;font-weight:700"':'';
       return `<tr class="hit" data-t="${h.t}"><td${y}>${hkDateDisp(new Date(h.t))}</td><td${y}>${hkTime(new Date(h.t),false)}</td><td${y}>${h.p.az.toFixed(2)}</td><td${y}>${h.p.alt.toFixed(2)}</td><td class="${okZ?'ok':''}">${sg(h.dz)}</td><td class="${okA?'ok':''}">${sg(h.da)}</td></tr>`; }).join('')
@@ -1168,6 +1172,7 @@ function runEclipseSearch(){
     const ds=dayStart().getTime();
     S.min=Math.max(0, Math.min(1439, Math.round((tt-ds)/60000)));
     fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
+    scheduleYearSearch();   // date/time/body changed -> the year search reference changed too
     centerOnBody();   // auto-aim VR at the eclipsed sun/moon
   });
   markSel('eclipseTbl', selRow.eclipse);

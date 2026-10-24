@@ -100,7 +100,7 @@
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
       <span>Azi ±</span><input id="yAziTol" type="number" step="0.5" min="0.5" value="1" style="width:60px"><span>°</span>
       <span>Alt ±</span><input id="yAltTol" type="number" step="0.5" value="1" style="width:60px"><span>°</span>
-      <button id="yRun" style="margin-left:auto">重新搜尋</button>
+      <button id="yCsv">匯出 CSV</button><button id="yRun" style="margin-left:auto">重新搜尋</button>
     </div>
     <div id="yStatus" class="small">—</div>
     <div id="yearWrap"><table id="yearTbl"></table></div>
@@ -108,7 +108,7 @@
   <div id="tab3" class="tabpane">
     <div class="small">由所選日期起五年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
-      <button id="eRun" style="margin-left:auto">重新搜尋</button>
+      <button id="eCsv">匯出 CSV</button><button id="eRun" style="margin-left:auto">重新搜尋</button>
     </div>
     <div id="eStatus" class="small">—</div>
     <div id="eclipseWrap"><table id="eclipseTbl"></table></div>
@@ -581,10 +581,28 @@ function buildTrailTable(){
 }
 $('csv').onclick = () => {
   const step=+$('step').value, t0=dayStart().getTime();
-  let c=`# camera ${S.cam.join(',')}\ntime_HK,sun_azi,sun_alt,moon_azi,moon_alt\n`;
+  let c=`相機位置,${S.cam[0]},${S.cam[1]},${S.cam[2]} m AGL\n被攝點,${S.tgt[0]},${S.tgt[1]},${S.tgt[2]} mPD\ntime_HK,sun_azi,sun_alt,moon_azi,moon_alt\n`;
   for (let m=0;m<1440;m+=step){ const s=day.sun[m], mo=day.moon[m]; c+=`${S.date} ${hkTime(new Date(t0+m*60e3))},${s.az.toFixed(4)},${s.alt.toFixed(4)},${mo.az.toFixed(4)},${mo.alt.toFixed(4)}\n`; }
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'})); a.download=`trail_${S.date}.csv`; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\uFEFF'+c],{type:'text/csv;charset=utf-8'})); a.download=`trail_${S.date}.csv`; a.click();
 };
+
+// export a left-panel list as CSV — the table exactly as shown (UTF-8 BOM so
+// Excel opens the Chinese headers correctly; the "no results" placeholder row
+// is not exported)
+function exportTableCSV(tblId, prefix){
+  const t=$(tblId); if (!t) return;
+  const cells=tr=>[...tr.querySelectorAll('th,td')].map(c=>c.textContent.trim());
+  const head=[...t.querySelectorAll('tr')].filter(tr=>tr.querySelector('th')).map(cells);
+  const data=[...t.querySelectorAll('tr')].filter(tr=>tr.classList.contains('hit')).map(cells);
+  if (!data.length){ alert('沒有可匯出的資料'); return; }
+  const rows=[['相機位置',S.cam[0],S.cam[1],S.cam[2]+' m AGL'],['被攝點',S.tgt[0],S.tgt[1],S.tgt[2]+' mPD'],...head,...data];
+  const esc=v=>/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+  const csv='\uFEFF'+rows.map(r=>r.map(esc).join(',')).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download=`${prefix}_${S.date}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+$('yCsv').onclick=()=>exportTableCSV('yearTbl','year');
+$('eCsv').onclick=()=>exportTableCSV('eclipseTbl','eclipse');
 
 // alignment search for the day: local minima of separation, refined to ~0.1 s
 $('findDay').onclick = () => {

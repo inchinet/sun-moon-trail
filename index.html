@@ -84,6 +84,10 @@
   #eclipseTbl td, #eclipseTbl th, #yearTbl td, #yearTbl th { white-space:nowrap; }
   #eclipseTbl, #yearTbl { font-size:11.5px; }
   #eclipseTbl td, #eclipseTbl th, #yearTbl td, #yearTbl th { padding:2px 3px; }
+  #eContactDiv { margin-top:8px; }
+  #eContactDiv .ctitle { font-size:11.5px; font-weight:600; margin:4px 0 2px; }
+  #eContactTbl { font-size:11.5px; }
+  #eContactTbl td, #eContactTbl th { white-space:nowrap; padding:2px 3px; }
   .small { font-size:11px; opacity:.7; }
   @media (max-width:900px){ #panel{width:310px} #sky{width:calc(100vw - 334px)} #profile{left:326px;right:12px;width:auto;min-width:300px} #bottom{left:326px} }
   @media (max-width:650px){ #panel{width:calc(100vw - 24px);max-height:48vh} #sky,#profile{left:12px;right:12px;width:auto;min-width:0} #sky{top:calc(48vh + 20px);max-height:30vh} #profile{top:calc(78vh + 24px);bottom:auto;max-height:30vh} #bottom{left:12px} }
@@ -106,12 +110,12 @@
     <div id="yearWrap"><table id="yearTbl"></table></div>
   </div>
   <div id="tab3" class="tabpane">
-    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻。</div>
+    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻，並於下方顯示全部接觸時間（初虧→復圓）；點擊接觸列可跳去嗰一刻。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
       <button id="eCsv">匯出 CSV</button><button id="eRun" style="margin-left:auto">重新搜尋</button>
     </div>
     <div id="eStatus" class="small">—</div>
-    <div id="eclipseWrap"><table id="eclipseTbl"></table></div>
+    <div id="eclipseWrap"><table id="eclipseTbl"></table><div id="eContactDiv"></div></div>
   </div>
   <div id="tab1" class="tabpane active">
   <div style="display:flex; gap:6px; margin-bottom:6px">
@@ -156,7 +160,7 @@
   <div id="dayHits" class="small">—</div>
 
   <h2>全日路徑（每 <select id="step"><option>1</option><option selected>5</option><option>10</option><option>30</option></select> 分鐘）
-    <button id="csv" style="float:right">CSV</button></h2>
+    <button id="csv" style="float:right">匯出 CSV</button></h2>
   <div id="trailWrap"><table id="trail"></table></div>
   </div>
 </div>
@@ -1114,6 +1118,40 @@ function scheduleEclipseSearch(){
 }
 // ---------- tab 3: eclipse search (10 years) ----------
 let eclipseRows=[];
+// jump the whole app to a moment (ms) for a body ('Sun'/'Moon'): set date/time,
+// rebuild the day, keep the eclipse list (no re-search), auto-aim both 3D views
+function jumpToBodyTime(tt, body){
+  S.body=body; S.date=hkDateStr(new Date(tt));
+  const ds=dayStart().getTime();
+  S.min=Math.max(0, Math.min(1439, Math.round((tt-ds)/60000)));
+  fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
+  scheduleYearSearch();   // date/time/body changed -> the year search reference changed too
+  centerOnBody();   // auto-aim VR at the eclipsed sun/moon
+}
+// build the contact list (接觸時間） for one eclipse row: each contact gets the
+// body's Alt/Azi at that moment from bodyPos(); null entries (phases that do
+// not occur, e.g. U2/U3 in a partial eclipse) are dropped
+function mkContacts(body, list, obs){
+  return list.filter(c => c && c.t!=null).map(c => {
+    const p=bodyPos(body, new Date(c.t), obs);
+    return {code:c.code, zh:c.zh, t:c.t, az:p.az, alt:p.alt};
+  });
+}
+let selContactT=null;   // ms of the last clicked contact (for its highlight)
+function renderContacts(r){
+  const div=$('eContactDiv'); if (!div) return;
+  if (!r || !r.contacts){ div.innerHTML=''; return; }
+  const rows=r.contacts.map(c =>
+    `<tr class="hit${c.t===selContactT?' sel':''}" data-ct="${c.t}"${c.alt<0?' style="opacity:.55"':''}><td style="text-align:left">${c.code}</td><td style="text-align:left">${c.zh}</td><td>${hkDateDisp(new Date(c.t))} ${hkTime(new Date(c.t))}</td><td>${c.az.toFixed(1)}°</td><td>${c.alt.toFixed(1)}°</td></tr>`
+  ).join('');
+  div.innerHTML=`<div class="ctitle">接觸時間 — ${hkDateDisp(new Date(r.t))} ${r.type}（${r.kind}）· 撳接觸列跳去嗰一刻${r.contacts.some(c=>c.alt<0)?' · 灰色＝嗰刻喺地平線下':''}</div>`
+    + `<table id="eContactTbl"><tr><th style="text-align:left">代號</th><th style="text-align:left">接觸</th><th>時間</th><th>Azi</th><th>Alt</th></tr>${rows}</table>`;
+  div.querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
+    selContactT=+tr.dataset.ct;
+    div.querySelectorAll('tr').forEach(x => x.classList.toggle('sel', +x.dataset.ct===selContactT));
+    jumpToBodyTime(selContactT, r.body);
+  });
+}
 function runEclipseSearch(){
   eDirty=false; const job=++eJob;
   const obs=observer();
@@ -1135,7 +1173,14 @@ function runEclipseSearch(){
         const sp=bodyPos('Sun', e.peak.time.date, obs);
         rows.push({t:pt, type:'☀ 日食', kind:kindZh[e.kind]||e.kind,
           obsc:(e.obscuration*100).toFixed(1)+'%', begin:e.partial_begin.time.date.getTime(), endt:e.partial_end.time.date.getTime(),
-          az:sp.az, alt:sp.alt, body:'Sun'});
+          az:sp.az, alt:sp.alt, body:'Sun',
+          contacts:mkContacts('Sun', [
+            {code:'P1', zh:'初虧', t:e.partial_begin.time.date.getTime()},
+            e.total_begin ? {code:'U2', zh:(e.kind==='annular'?'環食始':'食既'), t:e.total_begin.time.date.getTime()} : null,
+            {code:'Max', zh:'食甚', t:pt},
+            e.total_end ? {code:'U3', zh:(e.kind==='annular'?'環食終':'生光'), t:e.total_end.time.date.getTime()} : null,
+            {code:'P4', zh:'復圓', t:e.partial_end.time.date.getTime()}
+          ], obs)});
       }
       d=new Date(pt+86400000); n++;
     }
@@ -1153,7 +1198,16 @@ function runEclipseSearch(){
         rows.push({t:pt, type:'🌙 月食', kind:kindZh[m.kind]||m.kind,
           obsc:m.kind==='total'?'100%':(m.obscuration*100).toFixed(1)+'%',
           begin:pt-m.sd_penum*60000, endt:pt+m.sd_penum*60000,
-          az:mp.az, alt:mp.alt, body:'Moon'});
+          az:mp.az, alt:mp.alt, body:'Moon',
+          contacts:mkContacts('Moon', [
+            {code:'P1', zh:'半影食始', t:pt-(m.sd_penum||0)*60000},
+            (m.sd_partial>0) ? {code:'U1', zh:'初虧', t:pt-m.sd_partial*60000} : null,
+            (m.sd_total>0) ? {code:'U2', zh:'食既', t:pt-m.sd_total*60000} : null,
+            {code:'Max', zh:'食甚', t:pt},
+            (m.sd_total>0) ? {code:'U3', zh:'生光', t:pt+m.sd_total*60000} : null,
+            (m.sd_partial>0) ? {code:'U4', zh:'復圓', t:pt+m.sd_partial*60000} : null,
+            {code:'P4', zh:'半影食終', t:pt+(m.sd_penum||0)*60000}
+          ], obs)});
       }
       d=new Date(pt+86400000*30); n++;
     }
@@ -1161,21 +1215,22 @@ function runEclipseSearch(){
   rows.sort((a,b)=>a.t-b.t);
   eclipseRows=rows;   // for overlay eclipse rendering
   const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th></tr>`;
-  $('eStatus').textContent=`未來十年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻）`;
+  $('eStatus').textContent=`未來十年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻，並顯示接觸時間）`;
   $('eclipseTbl').innerHTML = head + (rows.length ? rows.map(r =>
     `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
   ).join('') : `<tr><td colspan="9" style="text-align:center">（十年內無可見日／月食）</td></tr>`);
   $('eclipseTbl').querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
     const tt=+tr.dataset.t; selRow.eclipse=tt; markSel('eclipseTbl', tt);
-    S.body=tr.dataset.body; S.date=hkDateStr(new Date(tt));
-    // set time to peak (minutes from day start)
-    const ds=dayStart().getTime();
-    S.min=Math.max(0, Math.min(1439, Math.round((tt-ds)/60000)));
-    fillInputs(); computeDay(); riseSet(); buildTrailTable(); $('dayHits').textContent='—'; update();   // keep list (no re-search)
-    scheduleYearSearch();   // date/time/body changed -> the year search reference changed too
-    centerOnBody();   // auto-aim VR at the eclipsed sun/moon
+    selContactT=tt;   // the peak is the Max contact
+    renderContacts(rows.find(x => x.t===tt));
+    jumpToBodyTime(tt, tr.dataset.body);
+    $('eContactDiv').scrollIntoView({block:'nearest'});
   });
   markSel('eclipseTbl', selRow.eclipse);
+  // after a rebuild, restore the selected event's contact list (if it is still there)
+  const sr=rows.find(x => x.t===selRow.eclipse);
+  if (sr){ if (selContactT==null || !sr.contacts.some(c => c.t===selContactT)) selContactT=sr.t; renderContacts(sr); }
+  else renderContacts(null);
 }
 
 init3D(); fillInputs(); fullUpdate(); drawProfile();

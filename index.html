@@ -85,9 +85,13 @@
   #eclipseTbl, #yearTbl { font-size:11.5px; }
   #eclipseTbl td, #eclipseTbl th, #yearTbl td, #yearTbl th { padding:2px 3px; }
   #eContactDiv { margin-top:8px; }
-  #eContactDiv .ctitle { font-size:11.5px; font-weight:600; margin:4px 0 2px; }
+  #eContactDiv .ctitle, #revDiv .ctitle, #revDivMain .ctitle { font-size:11.5px; font-weight:600; margin:4px 0 2px; }
   #eContactTbl { font-size:11.5px; }
   #eContactTbl td, #eContactTbl th { white-space:nowrap; padding:2px 3px; }
+  #revDiv, #revDivMain { margin-top:8px; }
+  .revTbl { font-size:11.5px; }
+  .revTbl td, .revTbl th { white-space:nowrap; padding:2px 3px; }
+  .revBtn { padding:0 5px; cursor:pointer; }
   .small { font-size:11px; opacity:.7; }
   @media (max-width:900px){ #panel{width:310px} #sky{width:calc(100vw - 334px)} #profile{left:326px;right:12px;width:auto;min-width:300px} #bottom{left:326px} }
   @media (max-width:650px){ #panel{width:calc(100vw - 24px);max-height:48vh} #sky,#profile{left:12px;right:12px;width:auto;min-width:0} #sky{top:calc(48vh + 20px);max-height:30vh} #profile{top:calc(78vh + 24px);bottom:auto;max-height:30vh} #bottom{left:12px} }
@@ -110,12 +114,12 @@
     <div id="yearWrap"><table id="yearTbl"></table></div>
   </div>
   <div id="tab3" class="tabpane">
-    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻，並於下方顯示全部接觸時間（初虧→復圓）；點擊接觸列可跳去嗰一刻。</div>
+    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻，並於下方顯示全部接觸時間（初虧→復圓）；點擊接觸列可跳去嗰一刻。撳一列尾嘅 📐 會喺 2D 地圖畫出「反向搜尋相機位置」對準線，自己撳線上位置決定企邊。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
       <button id="eCsv">匯出 CSV</button><button id="eRun" style="margin-left:auto">重新搜尋</button>
     </div>
     <div id="eStatus" class="small">—</div>
-    <div id="eclipseWrap"><table id="eclipseTbl"></table><div id="eContactDiv"></div></div>
+    <div id="eclipseWrap"><table id="eclipseTbl"></table><div id="eContactDiv"></div><div id="revDiv"></div></div>
   </div>
   <div id="tab1" class="tabpane active">
   <div style="display:flex; gap:6px; margin-bottom:6px">
@@ -134,9 +138,10 @@
   <h2>🎯 被攝點（緯度, 經度, 高度 mPD）</h2>
   <div class="row"><input id="tgtLat"><input id="tgtLon"><input id="tgtH"></div>
   <div style="display:flex; gap:6px; margin:6px 0">
-    <button id="setCam">點地圖設相機</button><button id="setTgt">點地圖設被攝</button><button id="swap">⇄</button>
+    <button id="setCam">點地圖設相機</button><button id="setTgt">點地圖設被攝</button><button id="swap">⇄</button><button id="revGen" title="喺 2D 地圖畫出穿過被攝點的對準線（跟住目前日期／時間／天體即時更新），自己撳線上位置決定相機企邊">📐 對準線</button>
   </div>
   <div class="small">相機高度是離地高度（AGL）；被攝點高度仍是 mPD 絕對標高。例：行人天橋輸入 6 m。</div>
+  <div id="revDivMain"></div>
 
   <h2>📍 手動地標（3D 示意樓宇）</h2>
   <div class="row"><input id="lmAzi" placeholder="方位°"><input id="lmDist" placeholder="距離 m"><input id="lmH" placeholder="高度 m"></div>
@@ -160,7 +165,7 @@
   <div id="dayHits" class="small">—</div>
 
   <h2>全日路徑（每 <select id="step"><option>1</option><option selected>5</option><option>10</option><option>30</option></select> 分鐘）
-    <button id="csv" style="float:right">匯出 CSV</button></h2>
+    <button id="csv" style="float:right">CSV</button></h2>
   <div id="trailWrap"><table id="trail"></table></div>
   </div>
 </div>
@@ -287,6 +292,13 @@ const icon = t => L.divIcon({ html:`<div style="font-size:24px; transform:transl
 const camM = L.marker(S.cam, { icon:icon('📷'), draggable:true }).addTo(map);
 const tgtM = L.marker(S.tgt, { icon:icon('🎯'), draggable:true }).addTo(map);
 const sightL = L.polyline([], { color:'#ff4d6d', weight:3 }).addTo(map);
+// §10.2 reverse camera search: sharp magenta alignment line through the target
+// (white casing underneath so it stands out on the basemap)
+const revLB = L.polyline([], { color:'#ffffff', weight:9, opacity:.55 }).addTo(map);
+const revL = L.polyline([], { color:'#ff00d4', weight:4 }).addTo(map);
+const revM = L.marker([0,0], { icon:icon('📍') });
+let revState=null;   // {t, body, label, az, alt, tgt:[lat,lon,h]} of the drawn line (az/alt = body at peak, from the target)
+let revPick=null;    // last point evaluated on the line {lat, lon, d, across, camH, gndH}
 const sunL = L.polyline([], { color:'#ffb02e', weight:3 }).addTo(map);
 const moonL = L.polyline([], { color:'#2f8ff0', weight:4, lineCap:'round', lineJoin:'round' }).addTo(map);
 const riseLs = L.layerGroup().addTo(map);
@@ -298,7 +310,10 @@ map.on('mousemove', e => $('mouse').textContent = `${e.latlng.lat.toFixed(6)}, $
 let clickMode = null;
 $('setCam').onclick = () => setMode('cam'); $('setTgt').onclick = () => setMode('tgt');
 function setMode(m){ clickMode = clickMode===m ? null : m; $('setCam').classList.toggle('on', clickMode==='cam'); $('setTgt').classList.toggle('on', clickMode==='tgt'); }
-map.on('click', e => { if(!clickMode) return; S[clickMode][0]=+e.latlng.lat.toFixed(7); S[clickMode][1]=+e.latlng.lng.toFixed(7); setMode(null); fillInputs(); fullUpdate(); });
+map.on('click', e => {
+  if (clickMode){ S[clickMode][0]=+e.latlng.lat.toFixed(7); S[clickMode][1]=+e.latlng.lng.toFixed(7); setMode(null); fillInputs(); fullUpdate(); return; }
+  if (revState) evalRevPick(e.latlng.lat, e.latlng.lng);   // reverse search active: evaluate the clicked point on the line
+});
 camM.on('dragend', e => { const p=e.target.getLatLng(); S.cam[0]=+p.lat.toFixed(7); S.cam[1]=+p.lng.toFixed(7); fillInputs(); fullUpdate(); });
 tgtM.on('dragend', e => { const p=e.target.getLatLng(); S.tgt[0]=+p.lat.toFixed(7); S.tgt[1]=+p.lng.toFixed(7); fillInputs(); fullUpdate(); });
 $('swap').onclick = () => { [S.cam, S.tgt] = [S.tgt, S.cam]; fillInputs(); fullUpdate(); };
@@ -595,7 +610,7 @@ $('csv').onclick = () => {
 // is not exported)
 function exportTableCSV(tblId, prefix){
   const t=$(tblId); if (!t) return;
-  const cells=tr=>[...tr.querySelectorAll('th,td')].map(c=>c.textContent.trim());
+  const cells=tr=>[...tr.querySelectorAll('th,td')].filter(c=>!c.classList.contains('noexp')).map(c=>c.textContent.trim());
   const head=[...t.querySelectorAll('tr')].filter(tr=>tr.querySelector('th')).map(cells);
   const data=[...t.querySelectorAll('tr')].filter(tr=>tr.classList.contains('hit')).map(cells);
   if (!data.length){ alert('沒有可匯出的資料'); return; }
@@ -1029,9 +1044,12 @@ function update(){
   moonL.setLatLngs([S.cam, dest(S.cam[0],S.cam[1],moon.az,40000)]);
   sunL.setStyle({ opacity: sun.alt>0?1:.55, dashArray: sun.alt>0?null:'8 8' });
   moonL.setStyle({ color:'#2f8ff0', weight:4, opacity: moon.alt>0?1:.6, dashArray: moon.alt>0?null:'8 8' });
+  if (revState && revState.live) refreshRevLive();   // §10.2 general alignment line follows date/time/body live
   drawSky(); drawProfile();
 }
 function fullUpdate(){
+  // the reverse-search line is drawn for one fixed target: if the target moved, the line is stale
+  if (revState && (Math.abs(S.tgt[0]-revState.tgt[0])>1e-9 || Math.abs(S.tgt[1]-revState.tgt[1])>1e-9 || S.tgt[2]!==revState.tgt[2])) clearRevLine();
   camM.setLatLng(S.cam); tgtM.setLatLng(S.tgt); sightL.setLatLngs([S.cam,S.tgt]);
   const line=sightLine();
   $('lineInfo').innerHTML = `<b>方位角 Azi</b><span>${line.az.toFixed(3)}°</span><b>仰角 Alt</b><span>${line.alt.toFixed(3)}° <span class="small">(已計地球曲率+折射)</span></span>
@@ -1152,6 +1170,112 @@ function renderContacts(r){
     jumpToBodyTime(selContactT, r.body);
   });
 }
+// ---------- §10.2 reverse camera search （反向搜尋相機位置） ----------
+// For one eclipse, draw the alignment line on the 2D map: the line through the
+// target in the direction of the body at peak (az/alt measured AT the target).
+// The camera must stand on the long segment on the opposite side of the body;
+// the user picks the point himself by clicking the map, and the app reports
+// the required camera height / ground height / distance for that point.
+// Camera height is assumed 1.8 m above ground (user's decision, 2026-11-03).
+const REV_CAM_AGL=1.8;
+function drawRevLine(){
+  const back=(revState.az+180)%360;
+  const a=dest(revState.tgt[0], revState.tgt[1], back, 8000), b=dest(revState.tgt[0], revState.tgt[1], revState.az, 1500);
+  revLB.setLatLngs([a, revState.tgt.slice(0,2), b]); revL.setLatLngs([a, revState.tgt.slice(0,2), b]);
+}
+// required heights for a point at distance d along the camera-side ray:
+// invert sightLine(): sight alt = atan2(tgtH-camH, d) - curvature/refraction term must equal the body's alt
+function revPointAt(d){
+  const [tla, tlo, th]=revState.tgt;
+  const pt=dest(tla, tlo, (revState.az+180)%360, d);
+  const corr=deg(d*(1-K_REFR)/(2*R_EARTH));
+  const camH=th - d*Math.tan(rad(revState.alt+corr));
+  return { lat:pt[0], lon:pt[1], d, camH, gndH:camH-REV_CAM_AGL };
+}
+function startRevSearch(r){
+  selRow.eclipse=r.t; markSel('eclipseTbl', r.t);
+  selContactT=r.t; renderContacts(r);
+  const p=bodyPos(r.body, new Date(r.t), new A.Observer(S.tgt[0], S.tgt[1], S.tgt[2]));
+  revState={ live:false, t:r.t, body:r.body, label:`${hkDateDisp(new Date(r.t))} ${r.type}（${r.kind}）食甚`, when:'食甚時刻', az:p.az, alt:p.alt, tgt:[...S.tgt] };
+  $('revGen')?.classList.remove('on');
+  revPick=null; if (map.hasLayer(revM)) revM.remove();
+  drawRevLine();
+  renderRevInfo('喺 2D 地圖撳洋紅色線上面任何一點（要撳長嗰段，即被攝點背向天體嗰邊），我會幫你計嗰點所需嘅相機高度同距離。撳到線外嘅位會自動貼返去線上最近嗰點。');
+  if (!map.getBounds().contains([S.tgt[0], S.tgt[1]])) map.panTo([S.tgt[0], S.tgt[1]]);
+}
+// general (non-eclipse) live line, toggled by the main tab's 📐 對準線 button:
+// follows the current date/time/body (update() calls refreshRevLive)
+function startLiveRev(){
+  revState={ live:true, t:curTime().getTime(), body:S.body, label:'', when:'', az:0, alt:0, tgt:[...S.tgt] };
+  revPick=null; if (map.hasLayer(revM)) revM.remove();
+  $('revGen')?.classList.add('on');
+  refreshRevLive(true);
+  renderRevInfo('條線會跟住目前日期／時間／天體即時郁。喺 2D 地圖撳洋紅色線長嗰段（被攝點背向天體嗰邊）任何一點，自己決定相機企邊，我會幫你計嗰點所需嘅相機高度同距離。再撳「📐 對準線」或者「清除對準線」可以收起。');
+  if (!map.getBounds().contains([S.tgt[0], S.tgt[1]])) map.panTo([S.tgt[0], S.tgt[1]]);
+}
+$('revGen').onclick=()=>{ if (revState && revState.live) clearRevLine(); else startLiveRev(); };
+let revRenderedMin=-1, revRenderedBody='';   // what the live info panel was last rendered for (avoid DOM churn during playback)
+function refreshRevLive(force){
+  if (!revState || !revState.live) return;
+  const t=curTime();
+  const p=bodyPos(S.body, t, new A.Observer(revState.tgt[0], revState.tgt[1], revState.tgt[2]));
+  revState.t=t.getTime(); revState.body=S.body; revState.az=p.az; revState.alt=p.alt;
+  revState.label=`即時對準線 — ${S.body==='Sun'?'☀ 太陽':'🔵 月亮'} ${hkDateDisp(t)} ${hkTime(t,false)}`;
+  revState.when=`${hkDateDisp(t)} ${hkTime(t,false)}（live）`;
+  drawRevLine();
+  if (revPick){ const np=revPointAt(revPick.d); revPick={ ...np, across:0 }; revM.setLatLng([np.lat, np.lon]); }
+  const min=Math.floor(revState.t/60000);
+  if (force || min!==revRenderedMin || S.body!==revRenderedBody){ revRenderedMin=min; revRenderedBody=S.body; renderRevInfo(); }
+}
+function evalRevPick(lat, lon){
+  if (!revState) return;
+  const [tla, tlo]=revState.tgt;
+  const v=vincenty(tla, tlo, lat, lon);                    // clicked point as seen from the target
+  const back=(revState.az+180)%360;
+  const rel=((v.az-back+540)%360)-180;                     // click direction vs the camera-side ray
+  const along=v.dist*Math.cos(rad(rel)), across=v.dist*Math.sin(rad(rel));
+  if (along<20){ renderRevInfo('嗰點太近被攝點，或者喺天體嗰邊 — 相機要喺被攝點背向天體嗰邊。請撳洋紅線長嗰段、離被攝點至少幾十米嘅位置。'); return; }
+  revPick={ ...revPointAt(along), across };                // snap the click onto the line
+  revM.setLatLng([revPick.lat, revPick.lon]); if (!map.hasLayer(revM)) revM.addTo(map);
+  renderRevInfo();
+}
+function applyRevPick(){
+  if (!revPick || !revState) return;
+  const t=revState.t, body=revState.body;
+  S.cam[0]=+revPick.lat.toFixed(7); S.cam[1]=+revPick.lon.toFixed(7); S.cam[2]=REV_CAM_AGL;
+  fillInputs(); fullUpdate();          // DEM ground re-samples at the new camera point
+  jumpToBodyTime(t, body);
+}
+function renderRevInfo(msg){
+  let h='';
+  if (revState){
+    h=`<div class="ctitle">📐 ${revState.live?'對準線':'反向搜尋相機位置'} — ${revState.label}</div>`
+      + `<div class="small">對準線：由被攝點望向天體 Azi ${revState.az.toFixed(2)}° / Alt ${revState.alt.toFixed(2)}°（${revState.when}、喺被攝點計）；相機離地假設 ${REV_CAM_AGL} m。所需高度已計地球曲率+折射（同視線 Alt 計法一致）。</div>`;
+    if (msg) h+=`<div class="small" style="margin-top:2px">${msg}</div>`;
+    if (revPick){
+      const p=revPick;
+      h+=`<table class="revTbl">`
+        + `<tr><th style="text-align:left">你揀嘅位置（線上）</th><td>${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${Math.abs(p.across)>=1?`（你撳嘅位離線 ${Math.abs(p.across).toFixed(0)} m，已貼返線上）`:''}</td></tr>`
+        + `<tr><th style="text-align:left">離被攝點距離</th><td>${p.d<1000?p.d.toFixed(0)+' m':(p.d/1000).toFixed(2)+' km'}</td></tr>`
+        + `<tr><th style="text-align:left">所需相機高度</th><td>${p.camH.toFixed(1)} mPD</td></tr>`
+        + `<tr><th style="text-align:left">所需地面高度（相機離地 ${REV_CAM_AGL} m）</th><td>${p.gndH.toFixed(1)} mPD</td></tr></table>`
+        + `<div style="margin-top:4px"><button class="revApplyBtn">以呢點設為相機（離地 ${REV_CAM_AGL} m）</button> <button class="revClearBtn">清除對準線</button></div>`
+        + `<div class="small" style="margin-top:2px">「設為相機」之後會跳去${revState.live?'嗰一刻':'食甚時刻'}：主頁「與視線差 Δ」同 VR 取景器會用嗰點嘅真地面高（DEM）再驗證一次對準。</div>`;
+    } else {
+      h+=`<div style="margin-top:4px"><button class="revClearBtn">清除對準線</button></div>`;
+    }
+  }
+  for (const id of ['revDiv','revDivMain']){ const div=$(id); if (div) div.innerHTML=h; }
+  document.querySelectorAll('.revClearBtn').forEach(b => b.onclick=clearRevLine);
+  document.querySelectorAll('.revApplyBtn').forEach(b => b.onclick=applyRevPick);
+}
+function clearRevLine(){
+  revState=null; revPick=null; revRenderedMin=-1; revRenderedBody='';
+  $('revGen')?.classList.remove('on');
+  revLB.setLatLngs([]); revL.setLatLngs([]);
+  if (map.hasLayer(revM)) revM.remove();
+  renderRevInfo();
+}
 function runEclipseSearch(){
   eDirty=false; const job=++eJob;
   const obs=observer();
@@ -1214,11 +1338,15 @@ function runEclipseSearch(){
   } catch(err){}
   rows.sort((a,b)=>a.t-b.t);
   eclipseRows=rows;   // for overlay eclipse rendering
-  const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th></tr>`;
+  const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th><th class="noexp"></th></tr>`;
   $('eStatus').textContent=`未來十年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻，並顯示接觸時間）`;
   $('eclipseTbl').innerHTML = head + (rows.length ? rows.map(r =>
-    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td></tr>`
-  ).join('') : `<tr><td colspan="9" style="text-align:center">（十年內無可見日／月食）</td></tr>`);
+    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td><td class="noexp"><button class="revBtn" data-rev="${r.t}" title="反向搜尋相機位置：喺 2D 地圖畫出對準線">📐</button></td></tr>`
+  ).join('') : `<tr><td colspan="10" style="text-align:center">（十年內無可見日／月食）</td></tr>`);
+  $('eclipseTbl').querySelectorAll('.revBtn').forEach(b => b.onclick = e => {
+    e.stopPropagation();   // the 📐 only draws the line; it must not trigger the row's jump-to-peak
+    const r=rows.find(x => x.t===+b.dataset.rev); if (r) startRevSearch(r);
+  });
   $('eclipseTbl').querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
     const tt=+tr.dataset.t; selRow.eclipse=tt; markSel('eclipseTbl', tt);
     selContactT=tt;   // the peak is the Max contact

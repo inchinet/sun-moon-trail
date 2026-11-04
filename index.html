@@ -1195,18 +1195,21 @@ function revPointAt(d){
 function startRevSearch(r){
   selRow.eclipse=r.t; markSel('eclipseTbl', r.t);
   selContactT=r.t; renderContacts(r);
-  const p=bodyPos(r.body, new Date(r.t), new A.Observer(S.tgt[0], S.tgt[1], S.tgt[2]));
-  revState={ live:false, t:r.t, body:r.body, label:`${hkDateDisp(new Date(r.t))} ${r.type}（${r.kind}）食甚`, when:'食甚時刻', az:p.az, alt:p.alt, tgt:[...S.tgt] };
-  $('revGen')?.classList.remove('on');
+  // the eclipse line is live too (user's call, 2026-11-04): it starts at the peak moment
+  // (time jumps there first) and then follows the time slider, with the body fixed
+  // to this eclipse's body (followBody=false)
+  revState={ live:true, followBody:false, t:r.t, body:r.body, label:`${hkDateDisp(new Date(r.t))} ${r.type}（${r.kind}）`, when:'', az:0, alt:0, tgt:[...S.tgt] };
+  $('revGen')?.classList.add('on');
   revPick=null; if (map.hasLayer(revM)) revM.remove();
-  drawRevLine();
-  renderRevInfo('在 2D 地圖點擊洋紅色線上任何一點（請點擊較長的一段，即被攝點背向天體的一方），系統會為你計算該點所需的相機高度與距離。點到線外的位置會自動貼回線上最近的一點。');
+  jumpToBodyTime(r.t, r.body);
+  refreshRevLive(true);
+  renderRevInfo('已跳至食甚時刻；此線會隨時間滑桿即時移動（天體固定為本宗食的太陽／月亮）。在 2D 地圖點擊洋紅色線較長的一段（被攝點背向天體的一方）任何一點，自行決定相機站位，系統會為你計算該點所需的相機高度與距離。點到線外的位置會自動貼回線上最近的一點。');
   if (!map.getBounds().contains([S.tgt[0], S.tgt[1]])) map.panTo([S.tgt[0], S.tgt[1]]);
 }
 // general (non-eclipse) live line, toggled by the main tab's 📐 對準線 button:
 // follows the current date/time/body (update() calls refreshRevLive)
 function startLiveRev(){
-  revState={ live:true, t:curTime().getTime(), body:S.body, label:'', when:'', az:0, alt:0, tgt:[...S.tgt] };
+  revState={ live:true, followBody:true, t:curTime().getTime(), body:S.body, label:'', when:'', az:0, alt:0, tgt:[...S.tgt] };
   revPick=null; if (map.hasLayer(revM)) revM.remove();
   $('revGen')?.classList.add('on');
   refreshRevLive(true);
@@ -1218,14 +1221,15 @@ let revRenderedMin=-1, revRenderedBody='';   // what the live info panel was las
 function refreshRevLive(force){
   if (!revState || !revState.live) return;
   const t=curTime();
-  const p=bodyPos(S.body, t, new A.Observer(revState.tgt[0], revState.tgt[1], revState.tgt[2]));
-  revState.t=t.getTime(); revState.body=S.body; revState.az=p.az; revState.alt=p.alt;
-  revState.label=`即時對準線 — ${S.body==='Sun'?'☀ 太陽':'🔵 月亮'} ${hkDateDisp(t)} ${hkTime(t,false)}`;
+  const body = revState.followBody ? S.body : revState.body;   // main-tab line follows the body selector; eclipse line keeps its own body
+  const p=bodyPos(body, t, new A.Observer(revState.tgt[0], revState.tgt[1], revState.tgt[2]));
+  revState.t=t.getTime(); revState.body=body; revState.az=p.az; revState.alt=p.alt;
+  if (revState.followBody) revState.label=`即時對準線 — ${body==='Sun'?'☀ 太陽':'🔵 月亮'} ${hkDateDisp(t)} ${hkTime(t,false)}`;
   revState.when=`${hkDateDisp(t)} ${hkTime(t,false)}（live）`;
   drawRevLine();
   if (revPick){ const np=revPointAt(revPick.d); revPick={ ...np, across:0 }; revM.setLatLng([np.lat, np.lon]); }
   const min=Math.floor(revState.t/60000);
-  if (force || min!==revRenderedMin || S.body!==revRenderedBody){ revRenderedMin=min; revRenderedBody=S.body; renderRevInfo(); }
+  if (force || min!==revRenderedMin || body!==revRenderedBody){ revRenderedMin=min; revRenderedBody=body; renderRevInfo(); }
 }
 function evalRevPick(lat, lon){
   if (!revState) return;
@@ -1260,7 +1264,7 @@ function renderRevInfo(msg){
         + `<tr><th style="text-align:left">所需相機高度</th><td>${p.camH.toFixed(1)} mPD</td></tr>`
         + `<tr><th style="text-align:left">所需地面高度（相機離地 ${REV_CAM_AGL} m）</th><td>${p.gndH.toFixed(1)} mPD</td></tr></table>`
         + `<div style="margin-top:4px"><button class="revApplyBtn">以此點設為相機（離地 ${REV_CAM_AGL} m）</button> <button class="revClearBtn">清除對準線</button></div>`
-        + `<div class="small" style="margin-top:2px">「設為相機」之後會跳至${revState.live?'該時刻':'食甚時刻'}：主頁「與視線差 Δ」與 VR 取景器會用該點的真實地面高（DEM）再驗證一次對準。</div>`;
+        + `<div class="small" style="margin-top:2px">「設為相機」之後會跳至該時刻：主頁「與視線差 Δ」與 VR 取景器會用該點的真實地面高（DEM）再驗證一次對準。</div>`;
     } else {
       h+=`<div style="margin-top:4px"><button class="revClearBtn">清除對準線</button></div>`;
     }

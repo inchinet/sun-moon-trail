@@ -114,7 +114,7 @@
     <div id="yearWrap"><table id="yearTbl"></table></div>
   </div>
   <div id="tab3" class="tabpane">
-    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻，並於下方顯示全部接觸時間（初虧→復圓）；點擊接觸列可跳去嗰一刻。撳一列尾嘅 📐 會喺 2D 地圖畫出「反向搜尋相機位置」對準線，自己撳線上位置決定企邊。</div>
+    <div class="small">由所選日期起十年內，在相機位置可見的日食、月食。日食只列太陽在地平線以上且有遮擋的；月食只列食甚時月亮在地平線以上的。點擊任一列跳到食甚時刻，並於下方顯示全部接觸時間（初虧→復圓）；點擊接觸列可跳至該時刻。點擊一列末尾的 📐 會在 2D 地圖畫出「反向搜尋相機位置」對準線，自行點擊線上位置決定相機站位。</div>
     <div style="display:flex; gap:6px; align-items:center; margin:6px 0">
       <button id="eCsv">匯出 CSV</button><button id="eRun" style="margin-left:auto">重新搜尋</button>
     </div>
@@ -124,7 +124,7 @@
   <div id="tab1" class="tabpane active">
   <div style="display:flex; gap:6px; margin-bottom:6px">
     <input type="text" id="date" size="11" placeholder="yyyy/mm/dd" title="日期（yyyy/mm/dd）">
-    <button id="datePick" type="button" title="用日曆揀日期（格內顯示仍是 yyyy/mm/dd）">📅</button><input type="date" id="dateCal" tabindex="-1" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+    <button id="datePick" type="button" title="用日曆選擇日期（格內顯示仍是 yyyy/mm/dd）">📅</button><input type="date" id="dateCal" tabindex="-1" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
     <select id="body"><option value="Moon">🔵 月亮</option><option value="Sun">☀ 太陽</option></select>
   </div>
 
@@ -133,12 +133,12 @@
   <div class="row" style="margin-top:4px"><label title="隱藏所有 3D 樓宇圖層（身邊近樓遮擋時用；地形不受影響）。建議搭配手動地標使用"><input id="hideBld" type="checkbox"> 隱藏 3D 樓宇</label>
   <span title="只裁掉身邊 100 米內的扭曲近物/深色帶，遠樓保留"><button id="hideNear">隱藏近物</button><button id="showNear">顯示近物</button></span>
   <label title="隱藏 DEM 地形層（深色斜帶若是地形數據扭曲，勾選即消失；3D 樓宇不受影響）"><input id="hideTerrain" type="checkbox"> 隱藏地形</label>
-  <label title="沿全日軌跡每 120 秒畫一個真實大小的日/月面，像串珠排在軌跡上（日月每 120 秒移動約一個直徑，所以珠與珠剛好不重疊）。日食/月食期間，串珠會按食分逐粒變形變色：日食=黑月影按真實位置咬住太陽；月食=半影變暗→偏食缺口→全食紅月。食甚嗰粒有白圈標記"><input id="beads" type="checkbox" checked> 日月串珠</label></div>
+  <label title="沿全日軌跡每 120 秒畫一個真實大小的日/月面，像串珠排在軌跡上（日月每 120 秒移動約一個直徑，所以珠與珠剛好不重疊）。日食/月食期間，串珠會按食分逐粒變形變色：日食=黑月影按真實位置咬住太陽；月食=半影變暗→偏食缺口→全食紅月。食甚該粒有白圈標記"><input id="beads" type="checkbox" checked> 日月串珠</label></div>
   <div class="small" style="margin-top:2px">串珠顏色：🔵 正常 · 🌘 半影變暗 · ⚫ 本影缺口（日食＝月影） · 🔴 月全食 · ◎ 白圈＝食甚</div>
   <h2>🎯 被攝點（緯度, 經度, 高度 mPD）</h2>
   <div class="row"><input id="tgtLat"><input id="tgtLon"><input id="tgtH"></div>
   <div style="display:flex; gap:6px; margin:6px 0">
-    <button id="setCam">點地圖設相機</button><button id="setTgt">點地圖設被攝</button><button id="swap">⇄</button><button id="revGen" title="喺 2D 地圖畫出穿過被攝點的對準線（跟住目前日期／時間／天體即時更新），自己撳線上位置決定相機企邊">📐 對準線</button>
+    <button id="setCam">點地圖設相機</button><button id="setTgt">點地圖設被攝</button><button id="swap">⇄</button><button id="revGen" title="在 2D 地圖畫出穿過被攝點的對準線（隨目前日期／時間／天體即時更新），自行點擊線上位置決定相機站位">📐 對準線</button>
   </div>
   <div class="small">相機高度是離地高度（AGL）；被攝點高度仍是 mPD 絕對標高。例：行人天橋輸入 6 m。</div>
   <div id="revDivMain"></div>
@@ -181,7 +181,7 @@
     </span>
   </div>
   <div class="view3d"><div class="cz" id="sky3d"></div><canvas id="skyCanvas" width="1120" height="560"></canvas><div id="skyInfo" class="scene-meta"></div></div>
-  <div class="small">3D 樓宇/道路：地政總署 3D Spatial Data；山形：Terrain Tiles。滾輪縮放、拖曳平移；選焦距 = 全片幅視角。🎯 十字 = 被攝點方向，日/月為真實角大小。串珠 = 沿軌跡每 120 秒的日/月面（左面板「日月串珠」開關），食期間逐粒按食分變形變色，食甚嗰粒有白圈。</div>
+  <div class="small">3D 樓宇/道路：地政總署 3D Spatial Data；山形：Terrain Tiles。滾輪縮放、拖曳平移；選焦距 = 全片幅視角。🎯 十字 = 被攝點方向，日/月為真實角大小。串珠 = 沿軌跡每 120 秒的日/月面（左面板「日月串珠」開關），食期間逐粒按食分變形變色，食甚該粒有白圈。</div>
 </div>
 
 <div id="profile" class="glass">
@@ -1162,7 +1162,7 @@ function renderContacts(r){
   const rows=r.contacts.map(c =>
     `<tr class="hit${c.t===selContactT?' sel':''}" data-ct="${c.t}"${c.alt<0?' style="opacity:.55"':''}><td style="text-align:left">${c.code}</td><td style="text-align:left">${c.zh}</td><td>${hkDateDisp(new Date(c.t))} ${hkTime(new Date(c.t))}</td><td>${c.az.toFixed(1)}°</td><td>${c.alt.toFixed(1)}°</td></tr>`
   ).join('');
-  div.innerHTML=`<div class="ctitle">接觸時間 — ${hkDateDisp(new Date(r.t))} ${r.type}（${r.kind}）· 撳接觸列跳去嗰一刻${r.contacts.some(c=>c.alt<0)?' · 灰色＝嗰刻喺地平線下':''}</div>`
+  div.innerHTML=`<div class="ctitle">接觸時間 — ${hkDateDisp(new Date(r.t))} ${r.type}（${r.kind}）· 點擊接觸列跳至該時刻${r.contacts.some(c=>c.alt<0)?' · 灰色＝該刻在地平線下':''}</div>`
     + `<table id="eContactTbl"><tr><th style="text-align:left">代號</th><th style="text-align:left">接觸</th><th>時間</th><th>Azi</th><th>Alt</th></tr>${rows}</table>`;
   div.querySelectorAll('tr.hit').forEach(tr => tr.onclick = () => {
     selContactT=+tr.dataset.ct;
@@ -1200,7 +1200,7 @@ function startRevSearch(r){
   $('revGen')?.classList.remove('on');
   revPick=null; if (map.hasLayer(revM)) revM.remove();
   drawRevLine();
-  renderRevInfo('喺 2D 地圖撳洋紅色線上面任何一點（要撳長嗰段，即被攝點背向天體嗰邊），我會幫你計嗰點所需嘅相機高度同距離。撳到線外嘅位會自動貼返去線上最近嗰點。');
+  renderRevInfo('在 2D 地圖點擊洋紅色線上任何一點（請點擊較長的一段，即被攝點背向天體的一方），系統會為你計算該點所需的相機高度與距離。點到線外的位置會自動貼回線上最近的一點。');
   if (!map.getBounds().contains([S.tgt[0], S.tgt[1]])) map.panTo([S.tgt[0], S.tgt[1]]);
 }
 // general (non-eclipse) live line, toggled by the main tab's 📐 對準線 button:
@@ -1210,7 +1210,7 @@ function startLiveRev(){
   revPick=null; if (map.hasLayer(revM)) revM.remove();
   $('revGen')?.classList.add('on');
   refreshRevLive(true);
-  renderRevInfo('條線會跟住目前日期／時間／天體即時郁。喺 2D 地圖撳洋紅色線長嗰段（被攝點背向天體嗰邊）任何一點，自己決定相機企邊，我會幫你計嗰點所需嘅相機高度同距離。再撳「📐 對準線」或者「清除對準線」可以收起。');
+  renderRevInfo('此線會隨目前日期／時間／天體即時移動。在 2D 地圖點擊洋紅色線較長的一段（被攝點背向天體的一方）任何一點，自行決定相機站位，系統會為你計算該點所需的相機高度與距離。再按「📐 對準線」或「清除對準線」即可收起。');
   if (!map.getBounds().contains([S.tgt[0], S.tgt[1]])) map.panTo([S.tgt[0], S.tgt[1]]);
 }
 $('revGen').onclick=()=>{ if (revState && revState.live) clearRevLine(); else startLiveRev(); };
@@ -1234,7 +1234,7 @@ function evalRevPick(lat, lon){
   const back=(revState.az+180)%360;
   const rel=((v.az-back+540)%360)-180;                     // click direction vs the camera-side ray
   const along=v.dist*Math.cos(rad(rel)), across=v.dist*Math.sin(rad(rel));
-  if (along<20){ renderRevInfo('嗰點太近被攝點，或者喺天體嗰邊 — 相機要喺被攝點背向天體嗰邊。請撳洋紅線長嗰段、離被攝點至少幾十米嘅位置。'); return; }
+  if (along<20){ renderRevInfo('該點太近被攝點，或位於天體一方 — 相機須在被攝點背向天體的一方。請點擊洋紅線較長的一段、距被攝點至少數十米的位置。'); return; }
   revPick={ ...revPointAt(along), across };                // snap the click onto the line
   revM.setLatLng([revPick.lat, revPick.lon]); if (!map.hasLayer(revM)) revM.addTo(map);
   renderRevInfo();
@@ -1250,17 +1250,17 @@ function renderRevInfo(msg){
   let h='';
   if (revState){
     h=`<div class="ctitle">📐 ${revState.live?'對準線':'反向搜尋相機位置'} — ${revState.label}</div>`
-      + `<div class="small">對準線：由被攝點望向天體 Azi ${revState.az.toFixed(2)}° / Alt ${revState.alt.toFixed(2)}°（${revState.when}、喺被攝點計）；相機離地假設 ${REV_CAM_AGL} m。所需高度已計地球曲率+折射（同視線 Alt 計法一致）。</div>`;
+      + `<div class="small">對準線：由被攝點望向天體 Azi ${revState.az.toFixed(2)}° / Alt ${revState.alt.toFixed(2)}°（${revState.when}、以被攝點計算）；相機離地假設 ${REV_CAM_AGL} m。所需高度已計地球曲率+折射（與視線 Alt 計法一致）。</div>`;
     if (msg) h+=`<div class="small" style="margin-top:2px">${msg}</div>`;
     if (revPick){
       const p=revPick;
       h+=`<table class="revTbl">`
-        + `<tr><th style="text-align:left">你揀嘅位置（線上）</th><td>${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${Math.abs(p.across)>=1?`（你撳嘅位離線 ${Math.abs(p.across).toFixed(0)} m，已貼返線上）`:''}</td></tr>`
+        + `<tr><th style="text-align:left">你所選的位置（線上）</th><td>${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${Math.abs(p.across)>=1?`（你點擊的位置離線 ${Math.abs(p.across).toFixed(0)} m，已貼回線上）`:''}</td></tr>`
         + `<tr><th style="text-align:left">離被攝點距離</th><td>${p.d<1000?p.d.toFixed(0)+' m':(p.d/1000).toFixed(2)+' km'}</td></tr>`
         + `<tr><th style="text-align:left">所需相機高度</th><td>${p.camH.toFixed(1)} mPD</td></tr>`
         + `<tr><th style="text-align:left">所需地面高度（相機離地 ${REV_CAM_AGL} m）</th><td>${p.gndH.toFixed(1)} mPD</td></tr></table>`
-        + `<div style="margin-top:4px"><button class="revApplyBtn">以呢點設為相機（離地 ${REV_CAM_AGL} m）</button> <button class="revClearBtn">清除對準線</button></div>`
-        + `<div class="small" style="margin-top:2px">「設為相機」之後會跳去${revState.live?'嗰一刻':'食甚時刻'}：主頁「與視線差 Δ」同 VR 取景器會用嗰點嘅真地面高（DEM）再驗證一次對準。</div>`;
+        + `<div style="margin-top:4px"><button class="revApplyBtn">以此點設為相機（離地 ${REV_CAM_AGL} m）</button> <button class="revClearBtn">清除對準線</button></div>`
+        + `<div class="small" style="margin-top:2px">「設為相機」之後會跳至${revState.live?'該時刻':'食甚時刻'}：主頁「與視線差 Δ」與 VR 取景器會用該點的真實地面高（DEM）再驗證一次對準。</div>`;
     } else {
       h+=`<div style="margin-top:4px"><button class="revClearBtn">清除對準線</button></div>`;
     }
@@ -1341,7 +1341,7 @@ function runEclipseSearch(){
   const head=`<tr><th>日期</th><th>食甚</th><th>類型</th><th>種類</th><th>遮擋</th><th>開始</th><th>結束</th><th>Azi</th><th>Alt</th><th class="noexp"></th></tr>`;
   $('eStatus').textContent=`未來十年共 ${rows.length} 次可見日／月食（點擊跳到食甚時刻，並顯示接觸時間）`;
   $('eclipseTbl').innerHTML = head + (rows.length ? rows.map(r =>
-    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td><td class="noexp"><button class="revBtn" data-rev="${r.t}" title="反向搜尋相機位置：喺 2D 地圖畫出對準線">📐</button></td></tr>`
+    `<tr class="hit" data-t="${r.t}" data-body="${r.body}"><td>${hkDateDisp(new Date(r.t))}</td><td>${hkTime(new Date(r.t),false)}</td><td>${r.type}</td><td>${r.kind}</td><td>${r.obsc}</td><td>${hkTime(new Date(r.begin),false)}</td><td>${hkTime(new Date(r.endt),false)}</td><td>${r.az.toFixed(1)}°</td><td>${r.alt.toFixed(1)}°</td><td class="noexp"><button class="revBtn" data-rev="${r.t}" title="反向搜尋相機位置：在 2D 地圖畫出對準線">📐</button></td></tr>`
   ).join('') : `<tr><td colspan="10" style="text-align:center">（十年內無可見日／月食）</td></tr>`);
   $('eclipseTbl').querySelectorAll('.revBtn').forEach(b => b.onclick = e => {
     e.stopPropagation();   // the 📐 only draws the line; it must not trigger the row's jump-to-peak

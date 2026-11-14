@@ -882,16 +882,44 @@ function make3D(el){
     navigationHelpButton:false, fullscreenButton:false, infoBox:false, selectionIndicator:false, skyBox:false,
     requestRenderMode:true, maximumRenderTimeChange:Infinity });
   const sc=v.scene;
+  // safety net for the building style below: if a style expression ever throws
+  // during render, drop the style and carry on instead of leaving the panel
+  // dead behind Cesium's error dialog.
+  sc.renderError.addEventListener(() => { console.warn('render error, removing building style');
+    for (const t of (v._tilesets||[])){ try { t.style=undefined; } catch(e){} } sc.requestRender(); });
   if (sc.sun) sc.sun.show=false; if (sc.moon) sc.moon.show=false;   // drawn by our overlay (accurate, true size)
-  if (sc.skyAtmosphere) sc.skyAtmosphere.show=false; sc.globe.showGroundAtmosphere=false; sc.fog.enabled=false;
+  // "rendering makeup" (merged from the fx trial, always on): sun lighting that
+  // follows the app clock (synced in setCam3D), atmosphere and distance fog.
+  // Shadow maps stay OFF: at low sun angles (the app's main use case) the whole
+  // scene falls inside the shadow map and buildings render void-black.
+  if (sc.skyAtmosphere) sc.skyAtmosphere.show=true; sc.globe.showGroundAtmosphere=true;
+  sc.globe.enableLighting=true;
+  sc.fog.enabled=true; sc.fog.density=0.00012;   // aerial perspective: mild at 1.5 km, strong at 10 km+
   sc.backgroundColor=Cesium.Color.fromCssColorString('#3c6a9a');   // constant sky so silhouettes stay visible at night
   sc.screenSpaceCameraController.enableInputs=false;
   sc.globe.depthTestAgainstTerrain=true; sc.globe.baseColor=Cesium.Color.fromCssColorString('#22333a');
   sc.globe.maximumScreenSpaceError=1.5;
   if (HK3D_KEY) for (const ts of ['building','infrastructure'])
     Cesium.Cesium3DTileset.fromUrl(`https://data.map.gov.hk/api/3d-data/3dsd/WGS84/${ts}/tileset.json?key=${HK3D_KEY}`, { maximumScreenSpaceError:8 })
-      .then(t => { sc.primitives.add(t); sc.requestRender(); }).catch(e => console.warn('3D tileset', ts, e));
+      .then(t => { sc.primitives.add(t); (v._tilesets ??= []).push(t); applyBuildingMakeup(t); sc.requestRender(); }).catch(e => console.warn('3D tileset', ts, e));
   return v;
+}
+// Colour-by-height for the building tileset + a little ambient (IBL) fill.
+// NOTE: in Cesium's style engine a comparison such as ${HEIGHT} >= 120 THROWS
+// at render time when the property is undefined, so every band casts through
+// number() first (number(undefined) is NaN, and NaN >= n is simply false).
+// LandsD's tileset appears to carry no height property under these names, in
+// which case the final "true" branch applies a flat tint — harmless either way.
+function buildingColorStyle(){
+  const bands=[[120,'#efe3d2'],[70,'#e6d9c8'],[35,'#ddd3c2'],[12,'#cfc8ba']];
+  const props=['HEIGHT','height','Height','ROOF_HEIGHT','roofHeight'];
+  const conds=bands.map(([h,c])=>[ props.map(p=>`number(\${${p}}) >= ${h}`).join(' || '), `color('${c}')` ]);
+  conds.push(['true', `color('#c3c9cd')`]);
+  return new Cesium.Cesium3DTileStyle({ color:{ conditions:conds } });
+}
+function applyBuildingMakeup(t){
+  try { t.style = buildingColorStyle(); } catch(e){ console.warn('building style', e); }
+  try { t.imageBasedLightingFactor = new Cesium.Cartesian2(0.7, 0.0); } catch(e){}
 }
 function init3D(){
   if (typeof Cesium==='undefined') return;              // offline → 2D fallback
